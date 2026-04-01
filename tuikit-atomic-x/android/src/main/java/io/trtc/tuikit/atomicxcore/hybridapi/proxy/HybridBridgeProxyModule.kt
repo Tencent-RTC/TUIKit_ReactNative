@@ -10,6 +10,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.tencent.imsdk.v2.V2TIMManager
 import io.trtc.tuikit.atomicxcore.hybridapi.bridge.HybridBridge
 import io.trtc.tuikit.atomicxcore.hybridapi.json.fromJson
 
@@ -30,6 +31,10 @@ class HybridBridgeProxyModule(reactContext: ReactApplicationContext) :
 
     companion object {
         const val NAME = "HybridBridgeProxy"
+    }
+
+    init {
+        V2TIMManager.getInstance().callExperimentalAPI("setUIPlatform", 51, null)
     }
 
     @ReactMethod

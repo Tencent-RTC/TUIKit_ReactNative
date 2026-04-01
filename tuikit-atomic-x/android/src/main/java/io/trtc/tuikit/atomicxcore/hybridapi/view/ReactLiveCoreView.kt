@@ -19,6 +19,8 @@ import com.facebook.imagepipeline.image.CloseableImage
 import com.facebook.imagepipeline.request.ImageRequest
 import com.facebook.imagepipeline.request.ImageRequestBuilder
 import com.facebook.common.executors.CallerThreadExecutor
+import com.tencent.imsdk.v2.V2TIMManager
+import org.json.JSONObject
 import io.trtc.tuikit.atomicxcore.api.view.CoreViewType
 import io.trtc.tuikit.atomicxcore.api.view.LiveCoreView
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +45,7 @@ class ReactLiveCoreView(context: Context) : ReactFrameLayout(context) {
                 outline.setRoundRect(0, 0, view.width, view.height, round)
             }
         }
+        observeLive()
     }
 
     fun setCoreViewType(coreViewType: String?) {
@@ -141,6 +144,15 @@ class ReactLiveCoreView(context: Context) : ReactFrameLayout(context) {
     private fun Int.dpToPx(context: Context): Float {
         val density = context.resources.displayMetrics.density
         return this * density
+    }
+
+    private fun observeLive() {
+        val param = JSONObject().apply {
+            put("UIComponentType", 1101)
+        }.toString()
+        V2TIMManager.getInstance()
+            .callExperimentalAPI("reportTUIFeatureUsage", param, null)
+
     }
 }
 

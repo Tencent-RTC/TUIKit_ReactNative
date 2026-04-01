@@ -7,8 +7,8 @@ buildscript {
         ndkVersion = "27.2.12479018"
         kotlinVersion = "2.1.20"
         dokka_version = '1.8.20'
-        roomEngineSdk = buildEngineSource.toBoolean() ? project(":room_engine") : "io.trtc.uikit:rtc_room_engine:3.6.1.76"
-        atomicxCoreSdk = buildAtomicxCoreSource.toBoolean() ? project(":atomicxcore") : "io.trtc.uikit:atomicx-core:3.6.1.66"
+        roomEngineSdk = buildEngineSource.toBoolean() ? project(":room_engine") : "io.trtc.uikit:rtc_room_engine:3.6.4.104"
+        atomicxCoreSdk = buildAtomicxCoreSource.toBoolean() ? project(":atomicxcore") : "io.trtc.uikit:atomicx-core:3.6.2.98"
     }
     repositories {
         google()

@@ -1,6 +1,7 @@
 import Foundation
 import React
 import AtomicXCore
+import ImSDK_Plus
 
 @objc(HybridBridgeProxy)
 class HybridBridgeProxy: NSObject {
@@ -12,6 +13,16 @@ class HybridBridgeProxy: NSObject {
         return false
     }
     
+    override init() {
+        super.init()
+        V2TIMManager.sharedInstance().callExperimentalAPI(
+            api: "setUIPlatform",
+            param: NSNumber(value: 51),
+            succ: { _ in },
+            fail: { _, _ in }
+        )
+    }
+
     @objc
     func callAPI(_ json: String, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         print("[Proxy-callAPI] json: \(json)")

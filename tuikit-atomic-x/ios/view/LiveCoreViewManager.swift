@@ -2,10 +2,11 @@ import Foundation
 import UIKit
 import React
 import AtomicXCore
+import ImSDK_Plus
 
 @objc(LiveCoreViewManager)
 class LiveCoreViewManager: RCTViewManager {
-    
+
     override static func requiresMainQueueSetup() -> Bool {
         return true
     }
@@ -70,6 +71,7 @@ class ReactLiveCoreView: UIView {
         super.init(frame: frame)
         backgroundColor = .black
         setupCornerRadius()
+        observeLive()
     }
     
     required init?(coder: NSCoder) {
@@ -145,6 +147,25 @@ class ReactLiveCoreView: UIView {
         default:
             return .playView
         }
+    }
+
+    private func observeLive() {
+        let dictParam: [String: Any] = [
+            "UIComponentType": 1101
+        ]
+
+        guard let dataParam = try? JSONSerialization.data(withJSONObject: dictParam, options: []),
+              let strParam = String(data: dataParam, encoding: .utf8)
+        else {
+            return
+        }
+
+        V2TIMManager.sharedInstance().callExperimentalAPI(
+            api: "reportTUIFeatureUsage",
+            param: strParam as NSObject,
+            succ: { _ in },
+            fail: { _, _ in }
+        )
     }
 }
 

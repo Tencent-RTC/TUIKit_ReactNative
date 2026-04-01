@@ -100,7 +100,7 @@ dependencies {
   implementation "com.github.yyued:SVGAPlayer-Android:2.6.1"
 
   implementation("com.tencent.liteav:LiteAVSDK_Professional:12.9.0.19467")
-  implementation("com.tencent.imsdk:imsdk-plus:8.7.7207")
+  implementation("com.tencent.imsdk:imsdk-plus:8.9.7537")
   implementation("io.trtc.uikit:common:3.5.0.1332")
   
   // Check if source compilation is enabled (same logic as old project app/build.gradle)
@@ -129,6 +129,7 @@ dependencies {
   }
   
   if (useSourceCode && rootProject.ext.has('roomEngineSdk') && rootProject.ext.has('atomicxCoreSdk')) {
+    // Use source code compilation (same as old project)
     if (project.hasProperty('buildEngineSource') && buildEngineSource.toBoolean()) {
       api rootProject.ext.roomEngineSdk
       println "Using engine source: ${rootProject.ext.roomEngineSdk}"
@@ -138,13 +139,15 @@ dependencies {
       println "Using atomicx core source: ${rootProject.ext.atomicxCoreSdk}"
     }
   } else if (hasLocalAars) {
+    // Use local AAR files (same as old project)
     def atomicxCoreName = localAtomicxCoreAar.name.replace('.aar', '')
     def rtcRoomEngineName = localRtcRoomEngineAar.name.replace('.aar', '')
     api(name: atomicxCoreName, ext: 'aar')
     api(name: rtcRoomEngineName, ext: 'aar')
     println "Added local dependencies: ${atomicxCoreName}, ${rtcRoomEngineName}"
   } else {
-    api("io.trtc.uikit:atomicx-core:3.6.1.66")
-    api("io.trtc.uikit:rtc_room_engine:3.6.1.76")
+    // Use Maven dependencies (same as old project)
+    api("io.trtc.uikit:atomicx-core:3.6.2.98")
+    api("io.trtc.uikit:rtc_room_engine:3.6.4.104")
   }
 }

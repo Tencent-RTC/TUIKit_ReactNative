@@ -1,11 +1,11 @@
 /**
  * @module LiveListState
  * @module_description
- * 直播列表状态管理模块
- * 核心功能：管理直播间的完整生命周期，包括创建、加入、离开、结束等核心业务流程。
- * 技术特点：支持分页加载、实时状态同步、直播信息动态更新，采用响应式数据管理，确保UI与数据状态实时同步。
- * 业务价值：为直播平台提供核心的直播间管理能力，支持大规模并发直播场景，是直播业务的基础设施。
- * 应用场景：直播列表展示、直播间创建、直播状态管理、直播数据统计等核心业务场景。
+ * Live List State Management Module
+ * Core Features: Manages the complete lifecycle of live rooms, including creation, joining, leaving, and ending processes.
+ * Technical Features: Supports pagination loading, real-time state synchronization, and dynamic live information updates with reactive data management to ensure UI and data state synchronization.
+ * Business Value: Provides core live room management capabilities for live streaming platforms, supporting large-scale concurrent live scenarios as the infrastructure for live business.
+ * Use Cases: Live list display, live room creation, live status management, live data statistics, and other core business scenarios.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -27,7 +27,7 @@ import { validateRequired } from '../../utils';
 import { liveListStore } from './store';
 
 /**
- * 直播列表事件名称常量
+ * Live list event name constants
  */
 const LIVE_LIST_EVENTS = [
   'liveList',
@@ -36,7 +36,7 @@ const LIVE_LIST_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -75,31 +75,77 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  * ```
  */
 export function useLiveListState() {
-  // 从全局 store 获取初始快照，确保后挂载组件也能拿到已有列表与 currentLive
+  // Get initial snapshot from global store, ensuring late-mounted components can access existing list and currentLive
   const initialState = liveListStore.getState();
 
-  // 直播列表数据（由全局 store 驱动）
+  /**
+   * @memberof module:LiveListState
+   * @type {LiveInfoParam[]}
+   * @example
+   * ```tsx
+   * const { liveList } = useLiveListState();
+   * 
+   * 
+   * // Render list
+   * liveList.forEach(live => {
+   *   console.log('Live room:', live.liveID);
+   * });
+   * ```
+   */
   const [liveList, setLiveList] = useState<LiveInfoParam[]>(initialState.liveList);
 
-  // 直播列表游标，用于分页加载（由全局 store 驱动）
+  /**
+   * @memberof module:LiveListState
+   * @type {string}
+   * @example
+   * ```tsx
+   * const { liveListCursor, fetchLiveList } = useLiveListState();
+   * 
+   * // Load more lives
+   * if (liveListCursor) {
+   *   await fetchLiveList({ 
+   *     cursor: liveListCursor,
+   *     limit: 20 
+   *   });
+   * } else {
+   *   console.log('No more lives');
+   * }
+   * ```
+   */
   const [liveListCursor, setLiveListCursor] = useState<string>(initialState.liveListCursor);
 
-  // 当前直播信息（由全局 store 驱动）
+  /**
+   * @memberof module:LiveListState
+   * @type {LiveInfoParam | null}
+   * @example
+   * ```tsx
+   * const { currentLive, setCurrentLiveInfo } = useLiveListState();
+   * 
+   * // Enter live room
+   * setCurrentLiveInfo({ liveID: '12345', ... });
+   * 
+   * // Check if in a live room
+   * if (currentLive) {
+   *   console.log('Current live room:', currentLive.liveID);
+   *   console.log('Anchor:', currentLive.anchorInfo.nickname);
+   * }
+   * ```
+   */
   const [currentLive, setCurrentLive] = useState<LiveInfoParam | null>(initialState.currentLive);
 
-  // 事件监听器引用
+  // Event listener references
 
-  // 直播列表事件监听器映射
+  // Live list event listener mapping
   type WritableMap = Record<string, unknown>;
 
 
 
   /**
-   * 处理直播状态变化事件
+   * Handle live state change events
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -108,15 +154,15 @@ export function useLiveListState() {
 
       console.log(`[LivePage] ${eventName} event received:`, JSON.stringify(data));
 
-      // 检查 data 的 key 是否匹配 LIVE_LIST_EVENTS 中的某个值
+      // Check if data key matches any value in LIVE_LIST_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         Object.keys(data).forEach((key) => {
           if (LIVE_LIST_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'liveList') {
-              // liveList 是数组类型
+              // liveList is an array type
               let parsedData: LiveInfoParam[];
               if (Array.isArray(value)) {
                 parsedData = value as LiveInfoParam[];
@@ -125,10 +171,10 @@ export function useLiveListState() {
               } else {
                 parsedData = safeJsonParse<LiveInfoParam[]>(JSON.stringify(value), []);
               }
-              // 更新全局 store，由 store 统一驱动所有 hook 实例
+              // Update global store, which drives all hook instances uniformly
               liveListStore.setState({ liveList: parsedData });
             } else if (key === 'liveListCursor') {
-              // liveListCursor 是字符串类型
+              // liveListCursor is a string type
               let parsedData: string;
               if (typeof value === 'string') {
                 parsedData = value;
@@ -139,7 +185,7 @@ export function useLiveListState() {
               }
               liveListStore.setState({ liveListCursor: parsedData });
             } else if (key === 'currentLive') {
-              // currentLive 可能是对象或 null
+              // currentLive can be an object or null
               let parsedData: LiveInfoParam | null;
               if (value === null || value === undefined) {
                 parsedData = null;
@@ -163,7 +209,7 @@ export function useLiveListState() {
 
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
@@ -176,14 +222,14 @@ export function useLiveListState() {
       };
     };
 
-    // 保存监听器清理函数的引用
+    // Save references to listener cleanup functions
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     LIVE_LIST_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener will automatically register event listeners on both Native and JS layers
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -198,7 +244,7 @@ export function useLiveListState() {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -206,8 +252,8 @@ export function useLiveListState() {
   }, [handleEvent]);
 
   /**
-   * 订阅全局 liveListStore 的变化，驱动本地 state
-   * 确保多个页面之间共享同一份 liveList / currentLive / cursor
+   * Subscribe to global liveListStore changes to drive local state
+   * Ensures multiple pages share the same liveList / currentLive / cursor
    */
   useEffect(() => {
     const unsubscribe = liveListStore.subscribe((state) => {
@@ -219,23 +265,23 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 获取直播列表
+   * Fetch live list
    *
-   * @param params - 获取参数
+   * @param params - Fetch parameters
    * @example
    * ```tsx
    * await fetchLiveList({ cursor: '', count: 20 });
    * ```
    */
   const fetchLiveList = useCallback(async (params: FetchLiveListOptions): Promise<void> => {
-    // 提取回调函数
+    // Extract callback functions
     const { onSuccess, onError, ...fetchParams } = params;
 
     try {
       const result = await callNativeAPI<{ list: LiveInfoParam[]; cursor?: string }>('fetchLiveList', fetchParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Fetch live list failed');
@@ -248,23 +294,23 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 创建直播间
+   * Create live room
    *
-   * @param params - 创建参数
+   * @param params - Creation parameters
    * @example
    * ```tsx
    * await createLive({ liveID: 'your_live_id',  title: 'my live', coverUrl: 'https://example.com/cover.jpg' });
    * ```
    */
   const createLive = useCallback(async (params: CreateLiveOptions): Promise<void> => {
-    // 提取回调函数
+    // Extract callback functions
     const { onSuccess, onError, ...createParams } = params;
 
     try {
       const result = await callNativeAPI<LiveInfoParam>('createLive', createParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Create live failed');
@@ -277,16 +323,16 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 加入直播间
+   * Join live room
    *
-   * @param params - 加入参数
+   * @param params - Join parameters
    * @example
    * ```tsx
    * await joinLive({ liveID: 'host_live_id' });
    * ```
    */
   const joinLive = useCallback(async (params: JoinLiveOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     const validation = validateRequired(params, ['liveID']);
     if (!validation.valid) {
       const error = new Error(`Missing required parameters: ${validation.missing?.join(', ')}`);
@@ -294,14 +340,14 @@ export function useLiveListState() {
       return;
     }
 
-    // 提取回调函数
+    // Extract callback functions
     const { onSuccess, onError, ...joinParams } = params;
 
     try {
       const result = await callNativeAPI<LiveInfoParam>('joinLive', joinParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Join live failed');
@@ -314,9 +360,9 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 离开直播间
+   * Leave live room
    *
-   * @param params - 离开参数（可选）
+   * @param params - Leave parameters (optional)
    * @example
    * ```tsx
    * await leaveLive();
@@ -329,7 +375,7 @@ export function useLiveListState() {
       const result = await callNativeAPI<void>('leaveLive', leaveParams);
 
       if (result.success) {
-        // 成功时触发回调，并清理全局 LiveListStore 状态
+        // On success, trigger callback and clear global LiveListStore state
         liveListStore.clearState();
         onSuccess?.();
       } else {
@@ -343,9 +389,9 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 结束直播
+   * End live
    *
-   * @param params - 结束参数（可选）
+   * @param params - End parameters (optional)
    * @example
    * ```tsx
    * await endLive();
@@ -358,7 +404,7 @@ export function useLiveListState() {
       const result = await callNativeAPI<void>('endLive', endParams);
 
       if (result.success) {
-        // 成功时触发回调，并清理全局 LiveListStore 状态
+        // On success, trigger callback and clear global LiveListStore state
         liveListStore.clearState();
         onSuccess?.();
       } else {
@@ -372,16 +418,16 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 更新直播信息
+   * Update live information
    *
-   * @param params - 更新参数
+   * @param params - Update parameters
    * @example
    * ```tsx
    * await updateLiveInfo({ liveID: 'your_live_id', title: 'new title' });
    * ```
    */
   const updateLiveInfo = useCallback(async (params: UpdateLiveInfoOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     const validation = validateRequired(params, ['liveID']);
     if (!validation.valid) {
       const error = new Error(`Missing required parameters: ${validation.missing?.join(', ')}`);
@@ -389,14 +435,14 @@ export function useLiveListState() {
       return;
     }
 
-    // 提取回调函数
+    // Extract callback functions
     const { onSuccess, onError, ...updateParams } = params;
 
     try {
       const result = await callNativeAPI<LiveInfoParam>('updateLiveInfo', updateParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Update live info failed');
@@ -409,9 +455,9 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 调用实验性 API
+   * Call experimental API
    *
-   * @param params - 实验性 API 参数
+   * @param params - Experimental API parameters
    * @example
    * ```tsx
    * callExperimentalAPI({
@@ -447,10 +493,10 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 添加直播列表事件监听
+   * Add live list event listener
    *
-   * @param eventName - 事件名称，可选值: 'onLiveEnded'(直播结束)<br>'onKickedOutOfLive'(被踢出直播间)
-   * @param listener - 事件回调函数
+   * @param eventName - Event name, options: 'onLiveEnded' (live ended)<br>'onKickedOutOfLive' (kicked out of live room)
+   * @param listener - Event callback function
    * @example
    * ```tsx
    * addLiveListListener('onLiveEnded', {
@@ -472,10 +518,10 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * 移除直播列表事件监听
+   * Remove live list event listener
    *
-   * @param eventName - 事件名称，可选值: 'onLiveEnded'(直播结束)<br>'onKickedOutOfLive'(被踢出直播间)
-   * @param listener - 事件回调函数
+   * @param eventName - Event name, options: 'onLiveEnded' (live ended)<br>'onKickedOutOfLive' (kicked out of live room)
+   * @param listener - Event callback function
    * @example
    * ```tsx
    * removeLiveListListener('onLiveEnded', liveEndedListener);
@@ -497,20 +543,20 @@ export function useLiveListState() {
 
 
   return {
-    liveList,               // 直播列表数据
-    liveListCursor,         // 直播列表分页游标
-    currentLive,            // 当前直播信息
+    liveList,               // Live list data
+    liveListCursor,         // Live list pagination cursor
+    currentLive,            // Current live information
 
-    fetchLiveList,          // 获取直播列表
-    createLive,             // 创建直播
-    joinLive,               // 加入直播
-    leaveLive,              // 离开直播
-    endLive,                // 结束直播
-    updateLiveInfo,         // 更新直播信息
-    callExperimentalAPI,    // 调用实验性 API
+    fetchLiveList,          // Fetch live list
+    createLive,             // Create live
+    joinLive,               // Join live
+    leaveLive,              // Leave live
+    endLive,                // End live
+    updateLiveInfo,         // Update live information
+    callExperimentalAPI,    // Call experimental API
 
-    addLiveListListener,    // 添加事件监听
-    removeLiveListListener, // 移除事件监听
+    addLiveListListener,    // Add event listener
+    removeLiveListListener, // Remove event listener
   };
 }
 

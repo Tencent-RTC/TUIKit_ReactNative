@@ -1,11 +1,11 @@
 /**
  * @module DeviceState
  * @module_description
- * 设备状态管理模块
- * 核心功能：管理摄像头、麦克风等音视频设备的控制，提供设备状态监控、权限检查等基础设备服务。
- * 技术特点：支持多设备管理、设备状态实时监控、权限动态检查、设备故障自动恢复等高级功能。
- * 业务价值：为直播系统提供稳定的设备基础，确保音视频采集的可靠性和用户体验。
- * 应用场景：设备管理、权限控制、音视频采集、设备故障处理等基础技术场景。
+ * Device State Management Module
+ * Core Features: Manages audio/video devices like cameras and microphones, providing device status monitoring, permission checking, and basic device services.
+ * Technical Features: Supports multi-device management, real-time device status monitoring, dynamic permission checking, and automatic device failure recovery.
+ * Business Value: Provides a stable device foundation for live streaming systems, ensuring reliability of audio/video capture and user experience.
+ * Use Cases: Device management, permission control, audio/video capture, device failure handling, and other fundamental technical scenarios.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -40,12 +40,12 @@ import type {
 import { deviceStore } from './store';
 
 /**
- * 设备监听器函数类型
+ * Device listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 设备状态事件名称常量
+ * Device status event name constants
  */
 const DEVICE_EVENTS = [
     'microphoneStatus',
@@ -64,7 +64,7 @@ const DEVICE_EVENTS = [
 ];
 
 /**
- * 设备状态码到设备状态的映射
+ * Device status code to device status mapping
  */
 const DEVICE_STATUS_MAP: Record<DeviceStatusCodeType, DeviceStatusType> = {
     [DeviceStatusCode.OFF]: DeviceStatus.OFF,
@@ -72,7 +72,7 @@ const DEVICE_STATUS_MAP: Record<DeviceStatusCodeType, DeviceStatusType> = {
 } as const;
 
 /**
- * 设备错误码到设备错误的映射
+ * Device error code to device error mapping
  */
 const DEVICE_ERROR_MAP: Record<DeviceErrorCodeType, DeviceErrorType> = {
     [DeviceErrorCode.NO_ERROR]: DeviceErrorEnum.NO_ERROR,
@@ -84,7 +84,7 @@ const DEVICE_ERROR_MAP: Record<DeviceErrorCodeType, DeviceErrorType> = {
 } as const;
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
     try {
@@ -111,7 +111,7 @@ const VIDEO_QUALITY_STRING_MAP: Record<string, number> = {
 };
 
 /**
- * 将状态码映射为设备状态
+ * Map status code to device status
  */
 function mapStatusCodeToDeviceStatus(
     statusCode: number
@@ -125,7 +125,7 @@ function mapStatusCodeToDeviceStatus(
 }
 
 /**
- * 将错误码映射为设备错误
+ * Map error code to device error
  */
 function mapErrorCodeToDeviceError(errorCode: number): DeviceErrorType | null {
     const mappedError = DEVICE_ERROR_MAP[errorCode as DeviceErrorCodeType];
@@ -155,51 +155,209 @@ function mapErrorCodeToDeviceError(errorCode: number): DeviceErrorType | null {
  * 
  *   const handleOpenMic = async () => {
  *     await openLocalMicrophone({
- *       onSuccess: () => console.log('麦克风已打开'),
- *       onError: (error) => console.error('打开麦克风失败:', error)
+ *       onSuccess: () => console.log('Microphone opened'),
+ *       onError: (error) => console.error('Open microphone failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       <Text>麦克风状态: {microphoneStatus}</Text>
- *       <Button onPress={handleOpenMic} title="打开麦克风" />
+ *       <Text>Microphone status: {microphoneStatus}</Text>
+ *       <Button onPress={handleOpenMic} title="Open Microphone" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useDeviceState() {
-    // 从全局 store 获取初始状态
+    // Get initial state from global store
     const initialState = deviceStore.getState();
 
-    // 麦克风相关状态 - 使用全局 store 的初始值
+    /**
+     * @memberof module:DeviceState
+     * @type {DeviceStatusType | undefined}
+     * @example
+     * ```tsx
+     * const { microphoneStatus } = useDeviceState();
+     * 
+     * console.log('Microphone status:', microphoneStatus);
+     * if (microphoneStatus === DeviceStatus.ON) {
+     *   console.log('Microphone is on');
+     * }
+     * ```
+     */
     const [microphoneStatus, setMicrophoneStatus] = useState<DeviceStatusType | undefined>(initialState.microphoneStatus);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {DeviceErrorType | undefined}
+     * @example
+     * ```tsx
+     * const { microphoneLastError } = useDeviceState();
+     * 
+     * if (microphoneLastError === DeviceErrorEnum.NO_SYSTEM_PERMISSION) {
+     *   console.log('Microphone permission not granted');
+     * }
+     * ```
+     */
     const [microphoneLastError, setMicrophoneLastError] = useState<DeviceErrorType | undefined>(initialState.microphoneLastError);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {boolean}
+     * @example
+     * ```tsx
+     * const { hasPublishAudioPermission } = useDeviceState();
+     * 
+     * console.log('Audio publish permission:', hasPublishAudioPermission);
+     * ```
+     */
     const [hasPublishAudioPermission, setHasPublishAudioPermission] = useState<boolean>(initialState.hasPublishAudioPermission);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {number}
+     * @example
+     * ```tsx
+     * const { captureVolume } = useDeviceState();
+     * 
+     * console.log('Capture volume:', captureVolume);
+     * ```
+     */
     const [captureVolume, setStateCaptureVolume] = useState<number>(initialState.captureVolume);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {number}
+     * @example
+     * ```tsx
+     * const { currentMicVolume } = useDeviceState();
+     * 
+     * console.log('Current microphone volume:', currentMicVolume);
+     * ```
+     */
     const [currentMicVolume, setCurrentMicVolume] = useState<number>(initialState.currentMicVolume);
 
-    // 摄像头相关状态 - 使用全局 store 的初始值
+    /**
+     * @memberof module:DeviceState
+     * @type {DeviceStatusType | undefined}
+     * @example
+     * ```tsx
+     * const { cameraStatus } = useDeviceState();
+     * 
+     * console.log('Camera status:', cameraStatus);
+     * if (cameraStatus === DeviceStatus.ON) {
+     *   console.log('Camera is on');
+     * }
+     * ```
+     */
     const [cameraStatus, setCameraStatus] = useState<DeviceStatusType | undefined>(initialState.cameraStatus);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {DeviceErrorType | undefined}
+     * @example
+     * ```tsx
+     * const { cameraLastError } = useDeviceState();
+     * 
+     * if (cameraLastError === DeviceErrorEnum.NO_DEVICE_DETECTED) {
+     *   console.log('No camera detected');
+     * }
+     * ```
+     */
     const [cameraLastError, setCameraLastError] = useState<DeviceErrorType | undefined>(initialState.cameraLastError);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {boolean | undefined}
+     * @example
+     * ```tsx
+     * const { isFrontCamera } = useDeviceState();
+     * 
+     * console.log('Is front camera:', isFrontCamera);
+     * ```
+     */
     const [isFrontCamera, setIsFrontCamera] = useState<boolean | undefined>(initialState.isFrontCamera);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {MirrorType}
+     * @example
+     * ```tsx
+     * const { localMirrorType } = useDeviceState();
+     * 
+     * console.log('Local mirror type:', localMirrorType);
+     * ```
+     */
     const [localMirrorType, setLocalMirrorType] = useState<MirrorType>(initialState.localMirrorType);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {LocalVideoQuality | undefined}
+     * @example
+     * ```tsx
+     * const { localVideoQuality } = useDeviceState();
+     * 
+     * if (localVideoQuality) {
+     *   console.log('Video quality:', localVideoQuality);
+     * }
+     * ```
+     */
     const [localVideoQuality, setLocalVideoQuality] = useState<LocalVideoQuality | undefined>(initialState.localVideoQuality);
 
-    // 音频输出相关状态 - 使用全局 store 的初始值
+    /**
+     * @memberof module:DeviceState
+     * @type {number}
+     * @example
+     * ```tsx
+     * const { outputVolume } = useDeviceState();
+     * 
+     * console.log('Output volume:', outputVolume);
+     * ```
+     */
     const [outputVolume, setStateOutputVolume] = useState<number>(initialState.outputVolume);
+
+    /**
+     * @memberof module:DeviceState
+     * @type {AudioOutputType | undefined}
+     * @example
+     * ```tsx
+     * const { currentAudioRoute } = useDeviceState();
+     * 
+     * console.log('Current audio route:', currentAudioRoute);
+     * ```
+     */
     const [currentAudioRoute, setCurrentAudioRoute] = useState<AudioOutputType | undefined>(initialState.currentAudioRoute);
 
-    // 屏幕共享相关状态 - 使用全局 store 的初始值
+    /**
+     * @memberof module:DeviceState
+     * @type {DeviceStatusType | undefined}
+     * @example
+     * ```tsx
+     * const { screenStatus } = useDeviceState();
+     * 
+     * console.log('Screen share status:', screenStatus);
+     * ```
+     */
     const [screenStatus, setScreenStatus] = useState<DeviceStatusType | undefined>(initialState.screenStatus);
 
-    // 网络信息状态 - 使用全局 store 的初始值
+    /**
+     * @memberof module:DeviceState
+     * @type {NetworkInfo | undefined}
+     * @example
+     * ```tsx
+     * const { networkInfo } = useDeviceState();
+     * 
+     * if (networkInfo) {
+     *   console.log('Network info:', networkInfo);
+     * }
+     * ```
+     */
     const [networkInfo, setNetworkInfo] = useState<NetworkInfo | undefined>(initialState.networkInfo);
 
-    // 订阅全局 store 的状态变化
+    // Subscribe to global store state changes
     useEffect(() => {
-        // 订阅状态变化
+        // Subscribe to state changes
         const unsubscribe = deviceStore.subscribe((state) => {
             setMicrophoneStatus(state.microphoneStatus);
             setMicrophoneLastError(state.microphoneLastError);
@@ -217,26 +375,26 @@ export function useDeviceState() {
             setNetworkInfo(state.networkInfo);
         });
 
-        // 清理订阅
+        // Clean up subscription
         return unsubscribe;
     }, []);
 
     type WritableMap = Record<string, unknown>;
 
     /**
-     * 处理设备状态变化事件
-     * 更新全局 store，store 会自动通知所有订阅者
+     * Handle device status change events
+     * Updates global store, which automatically notifies all subscribers
      */
     const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
         try {
-            // 如果 event 已经是对象，直接使用；否则尝试解析
+            // If event is already an object, use it directly; otherwise try to parse
             const data = event && typeof event === 'object' && !Array.isArray(event)
                 ? event
                 : typeof event === 'string'
                     ? JSON.parse(event)
                     : event;
 
-            // 检查 data 的 key 是否匹配 DEVICE_EVENTS 中的某个值
+            // Check if data's keys match any value in DEVICE_EVENTS
             if (data && typeof data === 'object' && !Array.isArray(data)) {
                 const updates: Partial<typeof initialState> = {};
 
@@ -244,7 +402,7 @@ export function useDeviceState() {
                     if (DEVICE_EVENTS.includes(key)) {
                         const value = data[key];
 
-                        // 根据不同的 key 更新对应的响应式数据
+                        // Update corresponding reactive data based on different keys
                         if (key === 'microphoneStatus') {
                             const statusCode = typeof value === 'number' ? value : (Number(value) || -1);
                             const status = mapStatusCodeToDeviceStatus(statusCode);
@@ -306,7 +464,7 @@ export function useDeviceState() {
                     }
                 });
 
-                // 批量更新全局 store（只更新一次，避免多次通知）
+                // Batch update global store (only update once to avoid multiple notifications)
                 if (Object.keys(updates).length > 0) {
                     deviceStore.setState(updates);
                 }
@@ -317,7 +475,7 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 绑定事件监听
+     * Bind event listeners
      */
     useEffect(() => {
         const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
@@ -329,13 +487,13 @@ export function useDeviceState() {
                 listenerID: listenerID ?? null,
             };
         };
-        // 保存监听器清理函数的引用
+        // Save references to listener cleanup functions
         const cleanupFunctions: Array<{ remove: () => void }> = [];
 
         DEVICE_EVENTS.forEach((eventName) => {
             const keyObject = createListenerKeyObject(eventName);
             const key = JSON.stringify(keyObject);
-            // addListener 会自动注册 Native 端和 JS 层的事件监听器
+            // addListener automatically registers event listeners for both Native side and JS layer
             const subscription = addListener(key, handleEvent(eventName));
             if (subscription) {
                 cleanupFunctions.push(subscription);
@@ -348,7 +506,7 @@ export function useDeviceState() {
                 const key = JSON.stringify(keyObject);
                 removeListener(key);
             });
-            // 同时清理 JS 层的订阅
+            // Also clean up JS layer subscriptions
             cleanupFunctions.forEach((cleanup) => {
                 cleanup.remove();
             });
@@ -356,15 +514,15 @@ export function useDeviceState() {
     }, [handleEvent]);
 
     /**
-     * 请求 Android 权限
+     * Request Android permissions
      * 
-     * @param permission - 权限字符串或权限字符串数组
+     * @param permission - Permission string or array of permission strings
      * @example
      * ```tsx
-     * // 请求单个权限
+     * // Request single permission
      * await requestAndroidPermission('android.permission.RECORD_AUDIO');
      * 
-     * // 请求多个权限
+     * // Request multiple permissions
      * await requestAndroidPermission([
      *   'android.permission.RECORD_AUDIO',
      *   'android.permission.CAMERA'
@@ -378,16 +536,16 @@ export function useDeviceState() {
             return;
         }
 
-        // 权限字符串到 PermissionsAndroid.PERMISSIONS 的映射
+        // Permission string to PermissionsAndroid.PERMISSIONS mapping
         const permissionMap: Record<string, string> = {
             'android.permission.RECORD_AUDIO': PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
             'android.permission.CAMERA': PermissionsAndroid.PERMISSIONS.CAMERA,
         };
 
-        // 统一转换为数组处理
+        // Convert to array for unified processing
         const permissionArray = Array.isArray(permission) ? permission : [permission];
 
-        // 将权限字符串映射为 PermissionsAndroid.PERMISSIONS 值
+        // Map permission strings to PermissionsAndroid.PERMISSIONS values
         const androidPermissions = permissionArray
             .map((perm) => permissionMap[perm])
             .filter((perm): perm is string => perm !== undefined);
@@ -398,7 +556,7 @@ export function useDeviceState() {
         }
 
         try {
-            // 单个权限使用 request，多个权限使用 requestMultiple
+            // Use request for single permission, requestMultiple for multiple permissions
             if (androidPermissions.length === 1) {
                 await PermissionsAndroid.request(androidPermissions[0] as any);
             } else {
@@ -410,19 +568,19 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 打开本地麦克风
+     * Open local microphone
      * 
-     * @param params - 麦克风参数（可选）
+     * @param params - Microphone parameters (optional)
      * @example
      * ```tsx
      * await openLocalMicrophone({
-     *   onSuccess: () => console.log('麦克风已打开'),
-     *   onError: (error) => console.error('打开麦克风失败:', error)
+     *   onSuccess: () => console.log('Microphone opened'),
+     *   onError: (error) => console.error('Open microphone failed:', error)
      * });
      * ```
      */
     const openLocalMicrophone = useCallback(async (params?: OpenLocalMicrophoneOptions): Promise<void> => {
-        // Android 平台请求录音权限
+        // Request recording permission on Android platform
         if (Platform.OS === 'android') {
             await requestAndroidPermission('android.permission.RECORD_AUDIO');
         }
@@ -433,7 +591,7 @@ export function useDeviceState() {
             const result = await callNativeAPI<void>('openLocalMicrophone', microphoneParams);
 
             if (result.success) {
-                // 成功时只触发回调，状态更新由事件监听器处理
+                // Only trigger callback on success, state update is handled by event listener
                 onSuccess?.();
             } else {
                 const error = new Error(result.error || 'Open local microphone failed');
@@ -446,7 +604,7 @@ export function useDeviceState() {
     }, [requestAndroidPermission]);
 
     /**
-     * 关闭本地麦克风
+     * Close local microphone
      * 
      * @example
      * ```tsx
@@ -462,15 +620,15 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 设置采集音量
+     * Set capture volume
      * 
-     * @param params - 音量参数
+     * @param params - Volume parameters
      * @example
      * ```tsx
      * setCaptureVolume({
      *   volume: 80,
-     *   onSuccess: () => console.log('音量设置成功'),
-     *   onError: (error) => console.error('音量设置失败:', error)
+     *   onSuccess: () => console.log('Volume set successfully'),
+     *   onError: (error) => console.error('Set volume failed:', error)
      * });
      * ```
      */
@@ -493,15 +651,15 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 设置输出音量
+     * Set output volume
      * 
-     * @param params - 音量参数
+     * @param params - Volume parameters
      * @example
      * ```tsx
      * setOutputVolume({
      *   volume: 90,
-     *   onSuccess: () => console.log('输出音量设置成功'),
-     *   onError: (error) => console.error('输出音量设置失败:', error)
+     *   onSuccess: () => console.log('Output volume set successfully'),
+     *   onError: (error) => console.error('Set output volume failed:', error)
      * });
      * ```
      */
@@ -524,15 +682,15 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 设置音频路由
+     * Set audio route
      * 
-     * @param params - 音频路由参数
+     * @param params - Audio route parameters
      * @example
      * ```tsx
      * setAudioRoute({
      *   route: 'SPEAKERPHONE',
-     *   onSuccess: () => console.log('音频路由设置成功'),
-     *   onError: (error) => console.error('音频路由设置失败:', error)
+     *   onSuccess: () => console.log('Audio route set successfully'),
+     *   onError: (error) => console.error('Set audio route failed:', error)
      * });
      * ```
      */
@@ -561,20 +719,20 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 打开本地摄像头
+     * Open local camera
      * 
-     * @param params - 摄像头参数（可选）
+     * @param params - Camera parameters (optional)
      * @example
      * ```tsx
      * await openLocalCamera({
      *   isFront: true,
-     *   onSuccess: () => console.log('摄像头已打开'),
-     *   onError: (error) => console.error('打开摄像头失败:', error)
+     *   onSuccess: () => console.log('Camera opened'),
+     *   onError: (error) => console.error('Open camera failed:', error)
      * });
      * ```
      */
     const openLocalCamera = useCallback(async (params?: OpenLocalCameraOptions): Promise<void> => {
-        // Android 平台请求摄像头权限
+        // Request camera permission on Android platform
         if (Platform.OS === 'android') {
             await requestAndroidPermission('android.permission.CAMERA');
         }
@@ -585,7 +743,7 @@ export function useDeviceState() {
             const result = await callNativeAPI<void>('openLocalCamera', cameraParams);
 
             if (result.success) {
-                // 成功时只触发回调，状态更新由事件监听器处理
+                // Only trigger callback on success, state update is handled by event listener
                 onSuccess?.();
             } else {
                 const error = new Error(result.error || 'Open local camera failed');
@@ -598,7 +756,7 @@ export function useDeviceState() {
     }, [requestAndroidPermission]);
 
     /**
-     * 关闭本地摄像头
+     * Close local camera
      * 
      * @example
      * ```tsx
@@ -614,15 +772,15 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 切换摄像头前后置
+     * Switch camera front/back
      * 
-     * @param params - 切换参数
+     * @param params - Switch parameters
      * @example
      * ```tsx
      * switchCamera({
      *   isFront: true,
-     *   onSuccess: () => console.log('摄像头切换成功'),
-     *   onError: (error) => console.error('摄像头切换失败:', error)
+     *   onSuccess: () => console.log('Camera switched successfully'),
+     *   onError: (error) => console.error('Switch camera failed:', error)
      * });
      * ```
      */
@@ -645,15 +803,15 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 切换镜像
+     * Switch mirror
      * 
-     * @param params - 镜像参数
+     * @param params - Mirror parameters
      * @example
      * ```tsx
      * switchMirror({
      *   mirrorType: MirrorType.AUTO,
-     *   onSuccess: () => console.log('镜像切换成功'),
-     *   onError: (error) => console.error('镜像切换失败:', error)
+     *   onSuccess: () => console.log('Mirror switched successfully'),
+     *   onError: (error) => console.error('Switch mirror failed:', error)
      * });
      * ```
      */
@@ -661,7 +819,7 @@ export function useDeviceState() {
         const { onSuccess, onError, mirrorType, ...otherParams } = params;
         const mirrorParams = {
             ...otherParams,
-            mirrorType: mirrorType, // 直接使用枚举值（数字）
+            mirrorType: mirrorType, // Directly use enum value (number)
         };
 
         try {
@@ -681,16 +839,16 @@ export function useDeviceState() {
     }, [localMirrorType]);
 
     /**
-     * 更新视频质量
+     * Update video quality
      
      * 
-     * @param params - 视频质量参数
+     * @param params - Video quality parameters
      * @example
      * ```tsx
      * updateVideoQuality({
      *   quality: 'VIDEOQUALITY_1080P',
-     *   onSuccess: () => console.log('视频质量更新成功'),
-     *   onError: (error) => console.error('视频质量更新失败:', error)
+     *   onSuccess: () => console.log('Video quality updated successfully'),
+     *   onError: (error) => console.error('Update video quality failed:', error)
      * });
      * ```
      */
@@ -719,7 +877,7 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 开始屏幕共享
+     * Start screen share
      * 
      * @example
      * ```tsx
@@ -735,7 +893,7 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 停止屏幕共享
+     * Stop screen share
      * 
      * @example
      * ```tsx
@@ -751,15 +909,15 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 添加设备事件监听
+     * Add device event listener
      *
-     * @param eventName - 事件名称
-     * @param listener - 事件回调函数
-     * @param listenerID - 监听器ID（可选）
+     * @param eventName - Event name
+     * @param listener - Event callback function
+     * @param listenerID - Listener ID (optional)
      * @example
      * ```tsx
      * addDeviceListener('onDeviceStatusChanged', (params) => {
-     *   console.log('设备状态变化:', params);
+     *   console.log('Device status changed:', params);
      * });
      * ```
      */
@@ -775,10 +933,10 @@ export function useDeviceState() {
     }, []);
 
     /**
-     * 移除设备事件监听
+     * Remove device event listener
      *
-     * @param eventName - 事件名称
-     * @param listenerID - 监听器ID（可选）
+     * @param eventName - Event name
+     * @param listenerID - Listener ID (optional)
      * @example
      * ```tsx
      * removeDeviceListener('onDeviceStatusChanged');
@@ -796,45 +954,45 @@ export function useDeviceState() {
     }, []);
 
     return {
-        // 麦克风相关状态 - 从全局 store 读取
+        // Microphone-related state - read from global store
         microphoneStatus,
         microphoneLastError,
         hasPublishAudioPermission,
         captureVolume,
         currentMicVolume,
 
-        // 摄像头相关状态 - 从全局 store 读取
+        // Camera-related state - read from global store
         cameraStatus,
         cameraLastError,
         isFrontCamera,
-        localMirrorType,  // 关键：从 store 读取
+        localMirrorType,  // Key: read from store
         localVideoQuality,
 
-        // 音频输出相关状态 - 从全局 store 读取
+        // Audio output-related state - read from global store
         outputVolume,
         currentAudioRoute,
 
-        // 屏幕共享相关状态 - 从全局 store 读取
+        // Screen share-related state - read from global store
         screenStatus,
 
-        // 网络信息状态 - 从全局 store 读取
+        // Network info state - read from global store
         networkInfo,
 
-        // 方法
-        openLocalMicrophone,         // 打开本地麦克风
-        closeLocalMicrophone,        // 关闭本地麦克风
-        setCaptureVolume,            // 设置采集音量
-        setOutputVolume,             // 设置输出音量
-        setAudioRoute,               // 设置音频路由
-        openLocalCamera,             // 打开本地摄像头
-        closeLocalCamera,            // 关闭本地摄像头
-        switchCamera,                // 切换摄像头
-        switchMirror,                // 切换镜像
-        updateVideoQuality,          // 更新视频质量
-        startScreenShare,            // 开始屏幕共享
-        stopScreenShare,             // 停止屏幕共享
-        addDeviceListener,           // 添加设备事件监听
-        removeDeviceListener,        // 移除设备事件监听
+        // Methods
+        openLocalMicrophone,         // Open local microphone
+        closeLocalMicrophone,        // Close local microphone
+        setCaptureVolume,            // Set capture volume
+        setOutputVolume,             // Set output volume
+        setAudioRoute,               // Set audio route
+        openLocalCamera,             // Open local camera
+        closeLocalCamera,            // Close local camera
+        switchCamera,                // Switch camera
+        switchMirror,                // Switch mirror
+        updateVideoQuality,          // Update video quality
+        startScreenShare,            // Start screen share
+        stopScreenShare,             // Stop screen share
+        addDeviceListener,           // Add device event listener
+        removeDeviceListener,        // Remove device event listener
     };
 }
 

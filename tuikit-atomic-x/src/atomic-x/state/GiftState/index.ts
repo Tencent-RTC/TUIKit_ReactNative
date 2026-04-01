@@ -1,11 +1,11 @@
 /**
  * @module GiftState
  * @module_description
- * 礼物系统管理模块
- * 核心功能：处理礼物的发送、接收、礼物列表管理等功能，支持礼物分类、礼物动画、礼物统计等完整礼物经济系统。
- * 技术特点：支持礼物动画渲染、礼物特效处理、礼物统计、礼物排行榜等高级功能。
- * 业务价值：为直播平台提供核心的变现能力，支持礼物经济、虚拟货币等商业模式。
- * 应用场景：礼物打赏、虚拟货币、礼物特效、礼物统计等商业化场景。
+ * Gift System Management Module
+ * Core Features: Handles gift sending, receiving, and gift list management, supporting gift categorization, gift animations, gift statistics, and a complete gift economy system.
+ * Technical Features: Supports gift animation rendering, gift effects processing, gift statistics, gift leaderboards, and other advanced features.
+ * Business Value: Provides core monetization capabilities for live streaming platforms, supporting gift economy and virtual currency business models.
+ * Use Cases: Gift rewards, virtual currency, gift effects, gift statistics, and other commercialization scenarios.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -21,19 +21,19 @@ import type {
 import { giftStore } from './store';
 
 /**
- * 礼物监听器函数类型
+ * Gift listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 礼物状态事件名称常量
+ * Gift status event name constants
  */
 const GIFT_EVENTS = [
   'usableGifts',
 ];
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -50,7 +50,6 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 /**
  * GiftState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useGiftState } from '@/src/atomic-x/state/GiftState';
@@ -68,8 +67,8 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *       liveID: 'your_live_id',
  *       giftID: 'gift001',
  *       count: 1,
- *       onSuccess: () => console.log('发送成功'),
- *       onError: (error) => console.error('发送失败:', error)
+ *       onSuccess: () => console.log('Send successfully'),
+ *       onError: (error) => console.error('Send failed:', error)
  *     });
  *   };
  * 
@@ -83,44 +82,59 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *           ))}
  *         </View>
  *       ))}
- *       <Button onPress={handleSendGift} title="发送礼物" />
+ *       <Button onPress={handleSendGift} title="Send Gift" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useGiftState(liveID: string) {
-  // 从全局 store 获取初始状态
+  // Get initial state from global store
   const initialState = giftStore.getState(liveID);
 
-  // 可用礼物列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:GiftState
+   * @type {GiftCategoryParam[]}
+   * @example
+   * ```tsx
+   * const { usableGifts } = useGiftState(liveID);
+   * 
+   * console.log('Usable gift categories count:', usableGifts.length);
+   * usableGifts.forEach(category => {
+   *   console.log('Category:', category.name);
+   *   category.giftList?.forEach(gift => {
+   *     console.log('Gift:', gift.name, 'Price:', gift.price);
+   *   });
+   * });
+   * ```
+   */
   const [usableGifts, setUsableGifts] = useState<GiftCategoryParam[]>(initialState.usableGifts);
 
-  // 订阅全局 store 的状态变化
+  // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
       return;
     }
 
-    // 订阅状态变化
+    // Subscribe to state changes
     const unsubscribe = giftStore.subscribe(liveID, (state) => {
       setUsableGifts(state.usableGifts);
     });
 
-    // 清理订阅
+    // Clean up subscription
     return unsubscribe;
   }, [liveID]);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理礼物状态变化事件
-   * 更新全局 store，store 会自动通知所有订阅者
+   * Handle gift status change events
+   * Updates global store, which automatically notifies all subscribers
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -129,7 +143,7 @@ export function useGiftState(liveID: string) {
 
       console.log(`[GiftState] ${eventName} event received:`, JSON.stringify(data));
 
-      // 检查 data 的 key 是否匹配 GIFT_EVENTS 中的某个值
+      // Check if data's keys match any value in GIFT_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         const updates: {
           usableGifts?: GiftCategoryParam[];
@@ -139,9 +153,9 @@ export function useGiftState(liveID: string) {
           if (GIFT_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'usableGifts') {
-              // usableGifts 是数组类型
+              // usableGifts is array type
               let parsedData: GiftCategoryParam[];
               if (Array.isArray(value)) {
                 parsedData = value as GiftCategoryParam[];
@@ -155,7 +169,7 @@ export function useGiftState(liveID: string) {
           }
         });
 
-        // 批量更新全局 store（只更新一次，避免多次通知）
+        // Batch update global store (only update once to avoid multiple notifications)
         if (Object.keys(updates).length > 0) {
           giftStore.setState(liveID, updates);
         }
@@ -167,7 +181,7 @@ export function useGiftState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     if (!liveID) {
@@ -184,14 +198,14 @@ export function useGiftState(liveID: string) {
       };
     };
 
-    // 保存监听器清理函数的引用
+    // Save references to listener cleanup functions
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     GIFT_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener automatically registers event listeners for both Native side and JS layer
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -206,7 +220,7 @@ export function useGiftState(liveID: string) {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -214,15 +228,15 @@ export function useGiftState(liveID: string) {
   }, [handleEvent, liveID]);
 
   /**
-   * 刷新可用礼物列表
+   * Refresh usable gifts list
    * 
-   * @param params - 刷新礼物列表参数（可选）
+   * @param params - Refresh gifts list parameters (optional)
    * @example
    * ```tsx
    * await refreshUsableGifts({
    *   liveID: 'your_live_id',
-   *   onSuccess: () => console.log('刷新成功'),
-   *   onError: (error) => console.error('刷新失败:', error)
+   *   onSuccess: () => console.log('Refresh successfully'),
+   *   onError: (error) => console.error('Refresh failed:', error)
    * });
    * ```
    */
@@ -233,7 +247,7 @@ export function useGiftState(liveID: string) {
       const result = await callNativeAPI<GiftCategoryParam[]>('refreshUsableGifts', refreshParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // Only trigger callback on success, state update is handled by event listener
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Refresh usable gifts failed');
@@ -246,9 +260,9 @@ export function useGiftState(liveID: string) {
   }, []);
 
   /**
-   * 发送礼物
+   * Send gift
    * 
-   * @param params - 发送礼物参数
+   * @param params - Send gift parameters
    * @example
    * ```tsx
    * await sendGift({
@@ -256,13 +270,13 @@ export function useGiftState(liveID: string) {
    *   giftID: 'gift001',
    *   count: 1,
    *   receiverList: ['user1', 'user2'],
-   *   onSuccess: () => console.log('发送成功'),
-   *   onError: (error) => console.error('发送失败:', error)
+   *   onSuccess: () => console.log('Send successfully'),
+   *   onError: (error) => console.error('Send failed:', error)
    * });
    * ```
    */
   const sendGift = useCallback(async (params: SendGiftOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.liveID || !params.giftID || params.count === undefined) {
       const error = new Error('Missing required parameters: liveID, giftID or count');
       params.onError?.(error);
@@ -275,7 +289,7 @@ export function useGiftState(liveID: string) {
       const result = await callNativeAPI<void>('sendGift', giftParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // Only trigger callback on success, state update is handled by event listener
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Send gift failed');
@@ -288,21 +302,21 @@ export function useGiftState(liveID: string) {
   }, []);
 
   /**
-   * 设置礼物语言
+   * Set gift language
    * 
-   * @param params - 设置礼物语言参数
+   * @param params - Set gift language parameters
    * @example
    * ```tsx
    * await setLanguage({
    *   liveID: 'your_live_id',
    *   language: 'zh-CN',
-   *   onSuccess: () => console.log('设置成功'),
-   *   onError: (error) => console.error('设置失败:', error)
+   *   onSuccess: () => console.log('Set successfully'),
+   *   onError: (error) => console.error('Set failed:', error)
    * });
    * ```
    */
   const setLanguage = useCallback(async (params: SetLanguageOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.liveID || !params.language) {
       const error = new Error('Missing required parameters: liveID or language');
       params.onError?.(error);
@@ -315,7 +329,7 @@ export function useGiftState(liveID: string) {
       const result = await callNativeAPI<void>('setLanguage', languageParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // Only trigger callback on success, state update is handled by event listener
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Set language failed');
@@ -328,15 +342,15 @@ export function useGiftState(liveID: string) {
   }, []);
 
   /**
-   * 添加礼物事件监听器
+   * Add gift event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onReceiveGift'(收到礼物)
-   * @param listener - 事件监听器函数
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, options: 'onReceiveGift'(received gift)
+   * @param listener - Event listener function
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addGiftListener('onReceiveGift', (params) => {
-   *   console.log('收到礼物:', params);
+   *   console.log('Received gift:', params);
    * });
    * ```
    */
@@ -352,10 +366,10 @@ export function useGiftState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 移除礼物事件监听器
+   * Remove gift event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onReceiveGift'(收到礼物)
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, options: 'onReceiveGift'(received gift)
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeGiftListener('onReceiveGift');
@@ -373,12 +387,12 @@ export function useGiftState(liveID: string) {
   }, [liveID]);
 
   return {
-    usableGifts,         // 可用礼物列表
-    refreshUsableGifts,  // 刷新可用礼物列表
-    sendGift,            // 发送礼物
-    setLanguage,         // 设置礼物语言
-    addGiftListener,     // 添加礼物事件监听
-    removeGiftListener,  // 移除礼物事件监听
+    usableGifts,         // Usable gifts list
+    refreshUsableGifts,  // Refresh usable gifts list
+    sendGift,            // Send gift
+    setLanguage,         // Set gift language
+    addGiftListener,     // Add gift event listener
+    removeGiftListener,  // Remove gift event listener
   };
 }
 

@@ -1,11 +1,11 @@
 /**
  * @module BattleState
  * @module_description
- * 直播 PK 管理模块
- * 核心功能：处理主播间的PK对战流程，包括PK请求、接受、拒绝、退出等完整的PK管理功能。
- * 技术特点：支持实时PK状态同步、分数统计、PK时长控制、结果计算等高级功能。
- * 业务价值：为直播平台提供丰富的互动玩法，增加主播收益和用户粘性。
- * 应用场景：主播PK、对战直播、分数统计、互动游戏等娱乐互动场景。
+ * Live Battle Management Module
+ * Core Features: Handles battle process between streamers, including battle requests, acceptance, rejection, exit, and complete battle management functions.
+ * Technical Highlights: Supports real-time battle state synchronization, score statistics, battle duration control, result calculation, and other advanced features.
+ * Business Value: Provides rich interactive gameplay for live streaming platforms, increasing streamer revenue and user engagement.
+ * Application Scenarios: Streamer battle, battle live streaming, score statistics, interactive games, and other entertainment interaction scenarios.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -24,12 +24,12 @@ import type {
 import { battleStore } from './store';
 
 /**
- * PK 监听器函数类型
+ * Battle listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * PK 状态事件名称常量
+ * Battle state event name constants
  */
 const BATTLE_EVENTS = [
   'currentBattleInfo',
@@ -38,7 +38,7 @@ const BATTLE_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safe JSON parse
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -53,7 +53,7 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 }
 
 /**
- * 解析 Map 类型（从 JSON 对象或数组转换为 Map）
+ * Parse Map type (convert from JSON object or array to Map)
  */
 function parseMapFromJson(json: string): Map<string, number> | null {
   try {
@@ -64,7 +64,7 @@ function parseMapFromJson(json: string): Map<string, number> | null {
     if (!parsed || typeof parsed !== 'object') {
       return null;
     }
-    // 如果是数组格式 [["key", value], ...]
+    // If array format [["key", value], ...]
     if (Array.isArray(parsed)) {
       const map = new Map<string, number>();
       parsed.forEach(([key, value]: [string, number]) => {
@@ -74,7 +74,7 @@ function parseMapFromJson(json: string): Map<string, number> | null {
       });
       return map;
     }
-    // 如果是对象格式 { "key": value, ... }
+    // If object format { "key": value, ... }
     const map = new Map<string, number>();
     Object.entries(parsed).forEach(([key, value]) => {
       if (typeof value === 'number') {
@@ -91,7 +91,6 @@ function parseMapFromJson(json: string): Map<string, number> | null {
 /**
  * BattleState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useBattleState } from '@/src/atomic-x/state/BattleState';
@@ -110,61 +109,76 @@ function parseMapFromJson(json: string): Map<string, number> | null {
  *       liveID: 'your_live_id',
  *       userIDList: ['target_user_id'],
  *       timeout: 10,
- *       onSuccess: (battleInfo) => console.log('PK 请求成功:', battleInfo),
- *       onError: (error) => console.error('PK 请求失败:', error)
+ *       onSuccess: (battleInfo) => console.log('Battle request successful:', battleInfo),
+ *       onError: (error) => console.error('Battle request failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       {currentBattleInfo && <Text>PK ID: {currentBattleInfo.battleID}</Text>}
- *       <Text>PK 用户数: {battleUsers.length}</Text>
- *       <Button onPress={handleRequestBattle} title="请求 PK" />
+ *       {currentBattleInfo && <Text>Battle ID: {currentBattleInfo.battleID}</Text>}
+ *       <Text>Battle User Count: {battleUsers.length}</Text>
+ *       <Button onPress={handleRequestBattle} title="Request Battle" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useBattleState(liveID: string) {
-  // 从全局 store 获取初始状态
+  // Get initial state from global store
   const initialState = battleStore.getState(liveID);
 
-  // 当前 PK 信息 - 使用全局 store 的初始值
+  /**
+   * Current battle information
+   * @type {BattleInfoParam | null}
+   * @description Stores detailed information of current battle, including battle ID, state, duration, etc. null means no ongoing battle
+   * @default Get initial value from global store
+   */
   const [currentBattleInfo, setCurrentBattleInfo] = useState<BattleInfoParam | null>(initialState.currentBattleInfo);
 
-  // PK 用户列表 - 使用全局 store 的初始值
+  /**
+   * Battle user list
+   * @type {SeatUserInfoParam[]}
+   * @description List of all users participating in current battle, including user basic information and battle state
+   * @default Get initial value from global store
+   */
   const [battleUsers, setBattleUsers] = useState<SeatUserInfoParam[]>(initialState.battleUsers);
 
-  // PK 分数映射 - 使用全局 store 的初始值
+  /**
+   * Battle score mapping
+   * @type {Map<string, number> | null}
+   * @description Stores scores of users in battle, key is user ID, value is score, null means no score data
+   * @default Get initial value from global store
+   */
   const [battleScore, setBattleScore] = useState<Map<string, number> | null>(initialState.battleScore);
 
-  // 订阅全局 store 的状态变化
+  // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
       return;
     }
 
-    // 订阅状态变化
+    // Subscribe to state changes
     const unsubscribe = battleStore.subscribe(liveID, (state) => {
       setCurrentBattleInfo(state.currentBattleInfo);
       setBattleUsers(state.battleUsers);
       setBattleScore(state.battleScore);
     });
 
-    // 清理订阅
+    // Clean up subscription
     return unsubscribe;
   }, [liveID]);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理 PK 状态变化事件
-   * 更新全局 store，store 会自动通知所有订阅者
+   * Handle battle state change events
+   * Update global store, store will automatically notify all subscribers
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -173,7 +187,7 @@ export function useBattleState(liveID: string) {
 
       console.log(`[BattleState] ${eventName} event received:`, JSON.stringify(data));
 
-      // 检查 data 的 key 是否匹配 BATTLE_EVENTS 中的某个值
+      // Check if data's keys match any values in BATTLE_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         const updates: {
           currentBattleInfo?: BattleInfoParam | null;
@@ -185,9 +199,9 @@ export function useBattleState(liveID: string) {
           if (BATTLE_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'currentBattleInfo') {
-              // currentBattleInfo 可能是对象或 null
+              // currentBattleInfo can be object or null
               let parsedData: BattleInfoParam | null;
               if (value === null || value === undefined) {
                 parsedData = null;
@@ -200,7 +214,7 @@ export function useBattleState(liveID: string) {
               }
               updates.currentBattleInfo = parsedData;
             } else if (key === 'battleUsers') {
-              // battleUsers 是数组类型
+              // battleUsers is array type
               let parsedData: SeatUserInfoParam[];
               if (Array.isArray(value)) {
                 parsedData = value as SeatUserInfoParam[];
@@ -211,7 +225,7 @@ export function useBattleState(liveID: string) {
               }
               updates.battleUsers = parsedData;
             } else if (key === 'battleScore') {
-              // battleScore 需要特殊解析为 Map
+              // battleScore needs special parsing to Map
               let parsedData: Map<string, number> | null;
               if (value === null || value === undefined) {
                 parsedData = null;
@@ -227,7 +241,7 @@ export function useBattleState(liveID: string) {
           }
         });
 
-        // 批量更新全局 store（只更新一次，避免多次通知）
+        // Batch update global store (only update once to avoid multiple notifications)
         if (Object.keys(updates).length > 0) {
           battleStore.setState(liveID, updates);
         }
@@ -239,7 +253,7 @@ export function useBattleState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     if (!liveID) {
@@ -256,14 +270,14 @@ export function useBattleState(liveID: string) {
       };
     };
 
-    // 保存监听器清理函数的引用
+    // Save listener cleanup function references
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     BATTLE_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener will automatically register Native and JS layer event listeners
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -278,7 +292,7 @@ export function useBattleState(liveID: string) {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -286,9 +300,9 @@ export function useBattleState(liveID: string) {
   }, [handleEvent, liveID]);
 
   /**
-   * 请求 PK
+   * Request battle
    * 
-   * @param params - 请求 PK 参数
+   * @param params - Request battle parameters
    * @example
    * ```tsx
    * await requestBattle({
@@ -299,13 +313,13 @@ export function useBattleState(liveID: string) {
    *     duration: 300,
    *     needResponse: true,
    *   },
-   *   onSuccess: (battleInfo) => console.log('PK 请求成功:', battleInfo),
-   *   onError: (error) => console.error('PK 请求失败:', error)
+   *   onSuccess: (battleInfo) => console.log('Battle request successful:', battleInfo),
+   *   onError: (error) => console.error('Battle request failed:', error)
    * });
    * ```
    */
   const requestBattle = useCallback(async (params: RequestBattleOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.liveID || !params.userIDList || params.userIDList.length === 0) {
       const error = new Error('Missing required parameters: liveID or userIDList');
       params.onError?.(error);
@@ -318,7 +332,7 @@ export function useBattleState(liveID: string) {
       const result = await callNativeAPI<BattleInfoParam>('requestBattle', battleParams);
 
       if (result.success) {
-        // 成功时触发回调，状态更新由事件监听器处理
+        // Trigger callback on success, state update handled by event listener
         onSuccess?.(result.data, result.data);
       } else {
         const error = new Error(result.error || 'Request battle failed');
@@ -331,22 +345,22 @@ export function useBattleState(liveID: string) {
   }, []);
 
   /**
-   * 取消 PK 请求
+   * Cancel battle request
    * 
-   * @param params - 取消 PK 请求参数
+   * @param params - Cancel battle request parameters
    * @example
    * ```tsx
    * await cancelBattleRequest({
    *   liveID: 'your_live_id',
    *   battleID: 'battle_id',
    *   userIDList: ['target_user_id'],
-   *   onSuccess: () => console.log('取消 PK 请求成功'),
-   *   onError: (error) => console.error('取消 PK 请求失败:', error)
+   *   onSuccess: () => console.log('Battle request cancelled successfully'),
+   *   onError: (error) => console.error('Cancel battle request failed:', error)
    * });
    * ```
    */
   const cancelBattleRequest = useCallback(async (params: CancelBattleRequestOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.liveID || !params.battleID || !params.userIDList || params.userIDList.length === 0) {
       const error = new Error('Missing required parameters: liveID, battleID or userIDList');
       params.onError?.(error);
@@ -371,21 +385,21 @@ export function useBattleState(liveID: string) {
   }, []);
 
   /**
-   * 接受 PK
+   * Accept battle
    * 
-   * @param params - 接受 PK 参数
+   * @param params - Accept battle parameters
    * @example
    * ```tsx
    * await acceptBattle({
    *   liveID: 'your_live_id',
    *   battleID: 'battle_id',
-   *   onSuccess: () => console.log('接受 PK 成功'),
-   *   onError: (error) => console.error('接受 PK 失败:', error)
+   *   onSuccess: () => console.log('Battle accepted successfully'),
+   *   onError: (error) => console.error('Accept battle failed:', error)
    * });
    * ```
    */
   const acceptBattle = useCallback(async (params: AcceptBattleOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.liveID || !params.battleID) {
       const error = new Error('Missing required parameters: liveID or battleID');
       params.onError?.(error);
@@ -410,21 +424,21 @@ export function useBattleState(liveID: string) {
   }, []);
 
   /**
-   * 拒绝 PK
+   * Reject battle
    * 
-   * @param params - 拒绝 PK 参数
+   * @param params - Reject battle parameters
    * @example
    * ```tsx
    * await rejectBattle({
    *   liveID: 'your_live_id',
    *   battleID: 'battle_id',
-   *   onSuccess: () => console.log('拒绝 PK 成功'),
-   *   onError: (error) => console.error('拒绝 PK 失败:', error)
+   *   onSuccess: () => console.log('Battle rejected successfully'),
+   *   onError: (error) => console.error('Reject battle failed:', error)
    * });
    * ```
    */
   const rejectBattle = useCallback(async (params: RejectBattleOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.liveID || !params.battleID) {
       const error = new Error('Missing required parameters: liveID or battleID');
       params.onError?.(error);
@@ -449,21 +463,21 @@ export function useBattleState(liveID: string) {
   }, []);
 
   /**
-   * 退出 PK
+   * Exit battle
    * 
-   * @param params - 退出 PK 参数
+   * @param params - Exit battle parameters
    * @example
    * ```tsx
    * await exitBattle({
    *   liveID: 'your_live_id',
    *   battleID: 'battle_id',
-   *   onSuccess: () => console.log('退出 PK 成功'),
-   *   onError: (error) => console.error('退出 PK 失败:', error)
+   *   onSuccess: () => console.log('Exited battle successfully'),
+   *   onError: (error) => console.error('Exit battle failed:', error)
    * });
    * ```
    */
   const exitBattle = useCallback(async (params: ExitBattleOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.liveID || !params.battleID) {
       const error = new Error('Missing required parameters: liveID or battleID');
       params.onError?.(error);
@@ -488,15 +502,15 @@ export function useBattleState(liveID: string) {
   }, []);
 
   /**
-   * 添加 PK 事件监听器
+   * Add battle event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onBattleStarted'(PK 开始)<br>'onBattleEnded'(PK 结束)<br>'onUserJoinBattle'(当前有用户加入 PK 对战)<br>'onUserExitBattle'(当前有用户退出 PK 对战)<br>'onBattleRequestReceived'(收到 PK 请求)<br>'onBattleRequestCancelled'(取消 PK 请求)<br>'onBattleRequestTimeout'(当前 PK 对战请求超时)<br>'onBattleRequestAccept'(当前 PK 对战请求被接受)<br>'onBattleRequestReject'(当前 PK 对战请求被拒绝)
-   * @param listener - 事件处理函数
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, optional values: 'onBattleStarted'(Battle started)<br>'onBattleEnded'(Battle ended)<br>'onUserJoinBattle'(User joined battle)<br>'onUserExitBattle'(User exited battle)<br>'onBattleRequestReceived'(Battle request received)<br>'onBattleRequestCancelled'(Battle request cancelled)<br>'onBattleRequestTimeout'(Battle request timeout)<br>'onBattleRequestAccept'(Battle request accepted)<br>'onBattleRequestReject'(Battle request rejected)
+   * @param listener - Event handler function
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addBattleListener('onBattleStarted', (params) => {
-   *   console.log('PK 已开始:', params);
+   *   console.log('Battle started:', params);
    * });
    * ```
    */
@@ -512,10 +526,10 @@ export function useBattleState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 移除 PK 事件监听器
+   * Remove battle event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onBattleStarted'(PK 开始)<br>'onBattleEnded'(PK 结束)<br>'onUserJoinBattle'(当前有用户加入 PK 对战)<br>'onUserExitBattle'(当前有用户退出 PK 对战)<br>'onBattleRequestReceived'(收到 PK 请求)<br>'onBattleRequestCancelled'(取消 PK 请求)<br>'onBattleRequestTimeout'(当前 PK 对战请求超时)<br>'onBattleRequestAccept'(当前 PK 对战请求被接受)<br>'onBattleRequestReject'(当前 PK 对战请求被拒绝)
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, optional values: 'onBattleStarted'(Battle started)<br>'onBattleEnded'(Battle ended)<br>'onUserJoinBattle'(User joined battle)<br>'onUserExitBattle'(User exited battle)<br>'onBattleRequestReceived'(Battle request received)<br>'onBattleRequestCancelled'(Battle request cancelled)<br>'onBattleRequestTimeout'(Battle request timeout)<br>'onBattleRequestAccept'(Battle request accepted)<br>'onBattleRequestReject'(Battle request rejected)
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeBattleListener('onBattleStarted');
@@ -533,16 +547,16 @@ export function useBattleState(liveID: string) {
   }, [liveID]);
 
   return {
-    currentBattleInfo,      // 当前 PK 信息
-    battleUsers,            // PK 用户列表
-    battleScore,            // PK 分数映射
-    requestBattle,          // 请求 PK
-    cancelBattleRequest,    // 取消 PK 请求
-    acceptBattle,           // 接受 PK
-    rejectBattle,           // 拒绝 PK
-    exitBattle,             // 退出 PK
-    addBattleListener,      // 添加 PK 事件监听
-    removeBattleListener,   // 移除 PK 事件监听
+    currentBattleInfo,      // Current battle information
+    battleUsers,            // Battle user list
+    battleScore,            // Battle score mapping
+    requestBattle,          // Request battle
+    cancelBattleRequest,    // Cancel battle request
+    acceptBattle,           // Accept battle
+    rejectBattle,           // Reject battle
+    exitBattle,             // Exit battle
+    addBattleListener,      // Add battle event listener
+    removeBattleListener,   // Remove battle event listener
   };
 }
 

@@ -1,11 +1,11 @@
 /**
  * @module LiveSummaryState
  * @module_description
- * 统计信息状态管理模块
- * 核心功能：统计和展示直播过程中的关键数据，包括观看人数、点赞数、礼物数等实时统计。
- * 技术特点：支持实时数据采集、数据聚合、统计分析等功能，提供完整的直播数据视图。
- * 业务价值：为直播平台提供数据分析能力，支持直播效果评估和优化改进。
- * 应用场景：直播数据展示、主播分析、流量统计、商业数据报表等数据分析场景。
+ * Statistics Information State Management Module
+ * Core Features: Collects and displays key data during live streaming, including viewer count, like count, gift count, and other real-time statistics.
+ * Technical Features: Supports real-time data collection, data aggregation, statistical analysis, and provides a complete live data view.
+ * Business Value: Provides data analysis capabilities for live streaming platforms, supporting live streaming effect evaluation and optimization.
+ * Use Cases: Live data display, anchor analysis, traffic statistics, business data reports, and other data analysis scenarios.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -15,19 +15,19 @@ import type { SummaryData } from './types';
 import { liveSummaryStore } from './store';
 
 /**
- * 统计监听器函数类型
+ * Statistics listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 统计状态事件名称常量
+ * Statistics state event name constants
  */
 const LIVE_SUMMARY_EVENTS = [
   'summaryData',
 ];
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -44,7 +44,6 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 /**
  * LiveSummaryState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useLiveSummaryState } from '@/src/atomic-x/state/LiveSummaryState';
@@ -56,9 +55,9 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *     <View>
  *       {summaryData && (
  *         <>
- *           <Text>观看人数: {summaryData.viewerCount}</Text>
- *           <Text>点赞数: {summaryData.likeCount}</Text>
- *           <Text>礼物数: {summaryData.giftCount}</Text>
+ *           <Text>Viewer count: {summaryData.viewerCount}</Text>
+ *           <Text>Like count: {summaryData.likeCount}</Text>
+ *           <Text>Gift count: {summaryData.giftCount}</Text>
  *         </>
  *       )}
  *     </View>
@@ -67,37 +66,37 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  * ```
  */
 export function useLiveSummaryState(liveID: string) {
-  // 从全局 store 获取初始状态
+  // Get initial state from global store
   const initialState = liveSummaryStore.getState(liveID);
 
-  // 直播间统计信息 - 使用全局 store 的初始值
+  // Live room statistics information - using initial value from global store
   const [summaryData, setSummaryData] = useState<SummaryData | undefined>(initialState.summaryData);
 
-  // 订阅全局 store 的状态变化
+  // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
       return;
     }
 
-    // 订阅状态变化
+    // Subscribe to state changes
     const unsubscribe = liveSummaryStore.subscribe(liveID, (state) => {
       setSummaryData(state.summaryData);
     });
 
-    // 清理订阅
+    // Clean up subscription
     return unsubscribe;
   }, [liveID]);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理统计状态变化事件
-   * 更新全局 store，store 会自动通知所有订阅者
+   * Handle statistics state change events
+   * Update global store, which will automatically notify all subscribers
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -105,7 +104,7 @@ export function useLiveSummaryState(liveID: string) {
           : event;
 
 
-      // 检查 data 的 key 是否匹配 LIVE_SUMMARY_EVENTS 中的某个值
+      // Check if data key matches any value in LIVE_SUMMARY_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         const updates: {
           summaryData?: SummaryData;
@@ -115,9 +114,9 @@ export function useLiveSummaryState(liveID: string) {
           if (LIVE_SUMMARY_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'summaryData') {
-              // summaryData 是对象类型
+              // summaryData is an object type
               let parsedData: SummaryData;
               if (value && typeof value === 'object' && !Array.isArray(value)) {
                 parsedData = value as SummaryData;
@@ -131,7 +130,7 @@ export function useLiveSummaryState(liveID: string) {
           }
         });
 
-        // 批量更新全局 store（只更新一次，避免多次通知）
+        // Batch update global store (only update once to avoid multiple notifications)
         if (Object.keys(updates).length > 0) {
           liveSummaryStore.setState(liveID, updates);
         }
@@ -143,7 +142,7 @@ export function useLiveSummaryState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
@@ -155,14 +154,14 @@ export function useLiveSummaryState(liveID: string) {
         listenerID: listenerID ?? null,
       };
     };
-    // 保存监听器清理函数的引用
+    // Save references to listener cleanup functions
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     LIVE_SUMMARY_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener will automatically register event listeners on both Native and JS layers
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -177,7 +176,7 @@ export function useLiveSummaryState(liveID: string) {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -185,15 +184,15 @@ export function useLiveSummaryState(liveID: string) {
   }, [handleEvent, liveID]);
 
   /**
-   * 添加统计事件监听
+   * Add statistics event listener
    *
-   * @param eventName - 事件名称
-   * @param listener - 事件回调函数
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name
+   * @param listener - Event callback function
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addLiveSummaryListener('onSummaryDataChanged', (params) => {
-   *   console.log('统计数据变化:', params);
+   *   console.log('Statistics data changed:', params);
    * });
    * ```
    */
@@ -209,10 +208,10 @@ export function useLiveSummaryState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 移除统计事件监听
+   * Remove statistics event listener
    *
-   * @param eventName - 事件名称
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeLiveSummaryListener('onSummaryDataChanged');
@@ -230,9 +229,9 @@ export function useLiveSummaryState(liveID: string) {
   }, [liveID]);
 
   return {
-    summaryData,     // 直播间统计信息
-    addLiveSummaryListener,   // 添加统计事件监听
-    removeLiveSummaryListener, // 移除统计事件监听
+    summaryData,     // Live room statistics information
+    addLiveSummaryListener,   // Add statistics event listener
+    removeLiveSummaryListener, // Remove statistics event listener
   };
 }
 

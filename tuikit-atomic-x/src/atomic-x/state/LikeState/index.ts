@@ -1,11 +1,11 @@
 /**
  * @module LikeState
  * @module_description
- * 点赞互动管理模块
- * 核心功能：处理直播间的点赞功能，支持点赞发送、点赞统计、点赞事件监听等互动功能。
- * 技术特点：支持高并发点赞处理、实时点赞统计、点赞动画效果、点赞排行榜等高级功能。
- * 业务价值：为直播平台提供基础的互动能力，增强用户参与度和直播氛围。
- * 应用场景：点赞互动、人气统计、互动效果、用户参与等基础互动场景。
+ * Like Interaction Management Module
+ * Core Features: Handles like functionality in live rooms, supporting like sending, like statistics, like event listening, and other interactive features.
+ * Technical Features: Supports high-concurrency like processing, real-time like statistics, like animation effects, like leaderboards, and other advanced features.
+ * Business Value: Provides basic interaction capabilities for live streaming platforms, enhancing user engagement and live atmosphere.
+ * Use Cases: Like interactions, popularity statistics, interactive effects, user participation, and other basic interaction scenarios.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -18,19 +18,19 @@ import type {
 import { likeStore } from './store';
 
 /**
- * 点赞监听器函数类型
+ * Like listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 点赞状态事件名称常量
+ * Like status event name constants
  */
 const LIKE_EVENTS = [
     'totalLikeCount',
 ];
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
     try {
@@ -47,7 +47,6 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 /**
  * LikeState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useLikeState } from '@/src/atomic-x/state/LikeState';
@@ -63,52 +62,61 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *     await sendLike({
  *       liveID: 'your_live_id',
  *       count: 1,
- *       onSuccess: () => console.log('点赞成功'),
- *       onError: (error) => console.error('点赞失败:', error)
+ *       onSuccess: () => console.log('Like sent successfully'),
+ *       onError: (error) => console.error('Send like failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       <Text>总点赞数: {totalLikeCount}</Text>
- *       <Button onPress={handleSendLike} title="点赞" />
+ *       <Text>Total likes: {totalLikeCount}</Text>
+ *       <Button onPress={handleSendLike} title="Like" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useLikeState(liveID: string) {
-    // 从全局 store 获取初始状态
+    // Get initial state from global store
     const initialState = likeStore.getState(liveID);
 
-    // 总点赞数量 - 使用全局 store 的初始值
+    /**
+     * @memberof module:LikeState
+     * @type {number}
+     * @example
+     * ```tsx
+     * const { totalLikeCount } = useLikeState(liveID);
+     * 
+     * console.log('Total like count:', totalLikeCount);
+     * ```
+     */
     const [totalLikeCount, setTotalLikeCount] = useState<number>(initialState.totalLikeCount);
 
-    // 订阅全局 store 的状态变化
+    // Subscribe to global store state changes
     useEffect(() => {
         if (!liveID) {
             return;
         }
 
-        // 订阅状态变化
+        // Subscribe to state changes
         const unsubscribe = likeStore.subscribe(liveID, (state) => {
             setTotalLikeCount(state.totalLikeCount);
         });
 
-        // 清理订阅
+        // Clean up subscription
         return unsubscribe;
     }, [liveID]);
 
-    // 事件监听器引用
+    // Event listener references
     type WritableMap = Record<string, unknown>;
 
     /**
-     * 处理点赞状态变化事件
-     * 更新全局 store，store 会自动通知所有订阅者
+     * Handle like status change events
+     * Updates global store, which automatically notifies all subscribers
      */
     const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
         try {
-            // 如果 event 已经是对象，直接使用；否则尝试解析
+            // If event is already an object, use it directly; otherwise try to parse
             const data = event && typeof event === 'object' && !Array.isArray(event)
                 ? event
                 : typeof event === 'string'
@@ -117,7 +125,7 @@ export function useLikeState(liveID: string) {
 
             console.log(`[LikeState] ${eventName} event received:`, JSON.stringify(data));
 
-            // 检查 data 的 key 是否匹配 LIKE_EVENTS 中的某个值
+            // Check if data's keys match any value in LIKE_EVENTS
             if (data && typeof data === 'object' && !Array.isArray(data)) {
                 const updates: {
                     totalLikeCount?: number;
@@ -127,16 +135,16 @@ export function useLikeState(liveID: string) {
                     if (LIKE_EVENTS.includes(key)) {
                         const value = data[key];
 
-                        // 根据不同的 key 更新对应的响应式数据
+                        // Update corresponding reactive data based on different keys
                         if (key === 'totalLikeCount') {
-                            // totalLikeCount 是数字类型
+                            // totalLikeCount is number type
                             const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
                             updates.totalLikeCount = parsedData;
                         }
                     }
                 });
 
-                // 批量更新全局 store（只更新一次，避免多次通知）
+                // Batch update global store (only update once to avoid multiple notifications)
                 if (Object.keys(updates).length > 0) {
                     likeStore.setState(liveID, updates);
                 }
@@ -148,7 +156,7 @@ export function useLikeState(liveID: string) {
     }, [liveID]);
 
     /**
-     * 绑定事件监听
+     * Bind event listeners
      */
     useEffect(() => {
         if (!liveID) {
@@ -165,14 +173,14 @@ export function useLikeState(liveID: string) {
             };
         };
 
-        // 保存监听器清理函数的引用
+        // Save references to listener cleanup functions
         const cleanupFunctions: Array<{ remove: () => void }> = [];
 
         LIKE_EVENTS.forEach((eventName) => {
             const keyObject = createListenerKeyObject(eventName);
             const key = JSON.stringify(keyObject);
             console.log(key);
-            // addListener 会自动注册 Native 端和 JS 层的事件监听器
+            // addListener automatically registers event listeners for both Native side and JS layer
             const subscription = addListener(key, handleEvent(eventName));
             if (subscription) {
                 cleanupFunctions.push(subscription);
@@ -186,7 +194,7 @@ export function useLikeState(liveID: string) {
                 const key = JSON.stringify(keyObject);
                 removeListener(key);
             });
-            // 同时清理 JS 层的订阅
+            // Also clean up JS layer subscriptions
             cleanupFunctions.forEach((cleanup) => {
                 cleanup.remove();
             });
@@ -194,16 +202,16 @@ export function useLikeState(liveID: string) {
     }, [handleEvent, liveID]);
 
     /**
-     * 发送点赞
+     * Send like
      * 
-     * @param params - 点赞参数
+     * @param params - Like parameters
    * @example
    * ```tsx
    * await sendLike({
    *   liveID: 'your_live_id',
    *   count: 1,
-   *   onSuccess: () => console.log('点赞成功'),
-   *   onError: (error) => console.error('点赞失败:', error)
+   *   onSuccess: () => console.log('Like sent successfully'),
+   *   onError: (error) => console.error('Send like failed:', error)
    * });
    * ```
      */
@@ -214,7 +222,7 @@ export function useLikeState(liveID: string) {
             const result = await callNativeAPI<void>('sendLike', likeParams);
 
             if (result.success) {
-                // 成功时只触发回调，状态更新由事件监听器处理
+                // Only trigger callback on success, state update is handled by event listener
                 onSuccess?.();
             } else {
                 const error = new Error(result.error || 'Send like failed');
@@ -227,15 +235,15 @@ export function useLikeState(liveID: string) {
     }, []);
 
     /**
-     * 添加点赞事件监听
+     * Add like event listener
      * 
-     * @param eventName - 事件名称，可选值: 'onReceiveLikesMessage'(收到点赞消息)
-     * @param listener - 事件回调函数
-     * @param listenerID - 监听器ID（可选）
+     * @param eventName - Event name, options: 'onReceiveLikesMessage'(received like message)
+     * @param listener - Event callback function
+     * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addLikeListener('onReceiveLikesMessage', (params) => {
-   *   console.log('收到点赞消息:', params);
+   *   console.log('Received like message:', params);
    * });
    * ```
      */
@@ -251,10 +259,10 @@ export function useLikeState(liveID: string) {
     }, [liveID]);
 
     /**
-     * 移除点赞事件监听
+     * Remove like event listener
      * 
-     * @param eventName - 事件名称，可选值: 'onReceiveLikesMessage'(收到点赞消息)
-     * @param listenerID - 监听器ID（可选）
+     * @param eventName - Event name, options: 'onReceiveLikesMessage'(received like message)
+     * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeLikeListener('onReceiveLikesMessage');
@@ -272,10 +280,10 @@ export function useLikeState(liveID: string) {
     }, [liveID]);
 
     return {
-        totalLikeCount,       // 总点赞数量
-        sendLike,             // 发送点赞
-        addLikeListener,      // 添加点赞事件监听
-        removeLikeListener,   // 移除点赞事件监听
+        totalLikeCount,       // Total like count
+        sendLike,             // Send like
+        addLikeListener,      // Add like event listener
+        removeLikeListener,   // Remove like event listener
     };
 }
 

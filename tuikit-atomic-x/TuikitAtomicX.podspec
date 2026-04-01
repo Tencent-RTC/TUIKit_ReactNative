@@ -17,12 +17,11 @@ Pod::Spec.new do |s|
   s.private_header_files = "ios/**/*.h"
   
   # Dependencies
-  # Use >= 3.0.0 constraint to support source compilation mode (source podspec version may be 3.0.5 or other)
-  # For Maven/CocoaPods repository mode, versions are typically >= 3.5.0
-  s.dependency "AtomicXCore", "3.6.2"
-  s.dependency "RTCRoomEngine/Professional", "3.6.1"
+  s.dependency "AtomicXCore", "3.6.3"
+  s.dependency "RTCRoomEngine/Professional", "3.6.3"
   s.dependency "SVGAPlayer", "~> 2.5"
-  s.dependency "TXLiteAVSDK_Professional", "13.0.20278"
+  s.dependency "TXIMSDK_Plus_iOS_XCFramework", "8.9.7511"
+  s.dependency "TXLiteAVSDK_Professional", "12.9.20063"
 
   install_modules_dependencies(s)
 end

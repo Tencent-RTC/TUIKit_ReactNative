@@ -1,11 +1,11 @@
 /**
  * @module BaseBeautyState
  * @module_description
- * 基础美颜管理模块
- * 核心功能：提供磨皮、美白、红润等基础美颜效果调节，支持实时美颜参数调整。
- * 技术特点：支持实时美颜处理、参数平滑调节、性能优化等高级技术。
- * 业务价值：为直播平台提供基础的美颜能力，提升用户形象和直播质量。
- * 应用场景：美颜直播、形象优化、美颜调节、直播美化等需要美颜功能的场景。
+ * Basic Beauty Management Module
+ * Core Features: Provides basic beauty effect adjustments including smoothing, whitening, and ruddiness, supporting real-time beauty parameter tuning.
+ * Technical Highlights: Supports real-time beauty processing, smooth parameter adjustment, performance optimization, and other advanced technologies.
+ * Business Value: Provides basic beauty capabilities for live streaming platforms, improving user image and live quality.
+ * Application Scenarios: Beauty live streaming, image enhancement, beauty adjustment, live beautification, and other scenarios requiring beauty functions.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -22,12 +22,12 @@ import type {
 import { baseBeautyStore } from './store';
 
 /**
- * 美颜监听器函数类型
+ * Beauty listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 美颜状态事件名称常量
+ * Beauty state event name constants
  */
 const BEAUTY_EVENTS = [
   'smoothLevel',
@@ -36,7 +36,7 @@ const BEAUTY_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safe JSON parse
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -53,7 +53,6 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 /**
  * BaseBeautyState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useBaseBeautyState } from '@/src/atomic-x/state/BaseBeautyState';
@@ -70,67 +69,81 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *   const handleSetSmooth = async () => {
  *     await setSmoothLevel({
  *       smoothLevel: 5,
- *       onSuccess: () => console.log('设置成功'),
- *       onError: (error) => console.error('设置失败:', error)
+ *       onSuccess: () => console.log('Set successfully'),
+ *       onError: (error) => console.error('Set failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       <Text>磨皮级别: {smoothLevel}</Text>
- *       <Text>美白级别: {whitenessLevel}</Text>
- *       <Text>红润级别: {ruddyLevel}</Text>
- *       <Button onPress={handleSetSmooth} title="设置磨皮" />
+ *       <Text>Smoothing Level: {smoothLevel}</Text>
+ *       <Text>Whitening Level: {whitenessLevel}</Text>
+ *       <Text>Ruddiness Level: {ruddyLevel}</Text>
+ *       <Button onPress={handleSetSmooth} title="Set Smoothing" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useBaseBeautyState(liveID: string) {
-  // 从全局 store 获取初始状态
+  // Get initial state from global store
   const initialState = baseBeautyStore.getState(liveID);
 
-  // 磨皮级别 取值范围[0,9]: 0 表示关闭，9 表示效果最明显 - 使用全局 store 的初始值
+  /**
+   * Smoothing level
+   * @type {number}
+   * @description Value range [0,9]: 0 means off, 9 means most obvious effect
+   * @default Get initial value from global store
+   */
   const [smoothLevel, setSmoothLevelState] = useState<number>(initialState.smoothLevel);
 
-  // 美白级别 取值范围[0,9]: 0 表示关闭，9 表示效果最明显 - 使用全局 store 的初始值
+  /**
+   * Whitening level
+   * @type {number}
+   * @description Value range [0,9]: 0 means off, 9 means most obvious effect
+   * @default Get initial value from global store
+   */
   const [whitenessLevel, setWhitenessLevelState] = useState<number>(initialState.whitenessLevel);
 
-  // 红润级别 取值范围[0,9]: 0 表示关闭，9 表示效果最明显 - 使用全局 store 的初始值
+  /**
+   * Ruddiness level
+   * @type {number}
+   * @description Value range [0,9]: 0 means off, 9 means most obvious effect
+   * @default Get initial value from global store
+   */
   const [ruddyLevel, setRuddyLevelState] = useState<number>(initialState.ruddyLevel);
 
-  // 真实 UI 值（从全局 store 获取初始值，确保持久化）
   const [realUiValues, setRealUiValues] = useState<RealUiValues>(initialState.realUiValues);
 
-  // 订阅全局 store 的状态变化
+  // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
       return;
     }
 
-    // 订阅状态变化
+    // Subscribe to state changes
     const unsubscribe = baseBeautyStore.subscribe(liveID, (state) => {
       setSmoothLevelState(state.smoothLevel);
       setWhitenessLevelState(state.whitenessLevel);
       setRuddyLevelState(state.ruddyLevel);
-      // 同步 realUiValues 从全局 store
+      // Sync realUiValues from global store
       setRealUiValues(state.realUiValues);
     });
 
-    // 清理订阅
+    // Clean up subscription
     return unsubscribe;
   }, [liveID]);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理美颜状态变化事件
-   * 更新全局 store，store 会自动通知所有订阅者
+   * Handle beauty state change events
+   * Update global store, store will automatically notify all subscribers
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -139,7 +152,7 @@ export function useBaseBeautyState(liveID: string) {
 
       console.log(`[BaseBeautyState] ${eventName} event received:`, JSON.stringify(data));
 
-      // 检查 data 的 key 是否匹配 BEAUTY_EVENTS 中的某个值
+      // Check if data's keys match any values in BEAUTY_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         const updates: {
           smoothLevel?: number;
@@ -151,24 +164,24 @@ export function useBaseBeautyState(liveID: string) {
           if (BEAUTY_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'smoothLevel') {
-              // smoothLevel 是数字类型
+              // smoothLevel is number type
               const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
               updates.smoothLevel = parsedData;
             } else if (key === 'whitenessLevel') {
-              // whitenessLevel 是数字类型
+              // whitenessLevel is number type
               const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
               updates.whitenessLevel = parsedData;
             } else if (key === 'ruddyLevel') {
-              // ruddyLevel 是数字类型
+              // ruddyLevel is number type
               const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
               updates.ruddyLevel = parsedData;
             }
           }
         });
 
-        // 批量更新全局 store（只更新一次，避免多次通知）
+        // Batch update global store (only update once to avoid multiple notifications)
         if (Object.keys(updates).length > 0) {
           baseBeautyStore.setState(liveID, updates);
         }
@@ -180,7 +193,7 @@ export function useBaseBeautyState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
@@ -193,14 +206,14 @@ export function useBaseBeautyState(liveID: string) {
       };
     };
 
-    // 保存监听器清理函数的引用
+    // Save listener cleanup function references
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     BEAUTY_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener will automatically register Native and JS layer event listeners
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -215,7 +228,7 @@ export function useBaseBeautyState(liveID: string) {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -223,27 +236,27 @@ export function useBaseBeautyState(liveID: string) {
   }, [handleEvent]);
 
   /**
-   * 设置磨皮级别
+   * Set smoothing level
    * 
-   * @param params - 磨皮参数，取值范围[0,9]: 0 表示关闭，9 表示效果最明显
+   * @param params - Smoothing parameters, value range [0,9]: 0 means off, 9 means most obvious effect
    * @example
    * ```tsx
    * await setSmoothLevel({
    *   smoothLevel: 5,
-   *   onSuccess: () => console.log('设置成功'),
-   *   onError: (error) => console.error('设置失败:', error)
+   *   onSuccess: () => console.log('Set successfully'),
+   *   onError: (error) => console.error('Set failed:', error)
    * });
    * ```
    */
   const setSmoothLevel = useCallback(async (params: SetSmoothLevelOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (params.smoothLevel === undefined || params.smoothLevel === null) {
       const error = new Error('Missing required parameter: smoothLevel');
       params.onError?.(error);
       return;
     }
 
-    // 验证取值范围
+    // Validate value range
     if (params.smoothLevel < 0 || params.smoothLevel > 9) {
       const error = new Error('smoothLevel must be between 0 and 9');
       params.onError?.(error);
@@ -256,7 +269,7 @@ export function useBaseBeautyState(liveID: string) {
       const result = await callNativeAPI<void>('setSmoothLevel', smoothParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Set smooth level failed');
@@ -269,27 +282,27 @@ export function useBaseBeautyState(liveID: string) {
   }, []);
 
   /**
-   * 设置美白级别
+   * Set whitening level
    * 
-   * @param params - 美白参数，取值范围[0,9]: 0 表示关闭，9 表示效果最明显
+   * @param params - Whitening parameters, value range [0,9]: 0 means off, 9 means most obvious effect
    * @example
    * ```tsx
    * await setWhitenessLevel({
    *   whitenessLevel: 6,
-   *   onSuccess: () => console.log('设置成功'),
-   *   onError: (error) => console.error('设置失败:', error)
+   *   onSuccess: () => console.log('Set successfully'),
+   *   onError: (error) => console.error('Set failed:', error)
    * });
    * ```
    */
   const setWhitenessLevel = useCallback(async (params: SetWhitenessLevelOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (params.whitenessLevel === undefined) {
       const error = new Error('Missing required parameter: whitenessLevel');
       params.onError?.(error);
       return;
     }
 
-    // 验证取值范围
+    // Validate value range
     if (params.whitenessLevel < 0 || params.whitenessLevel > 9) {
       const error = new Error('whitenessLevel must be between 0 and 9');
       params.onError?.(error);
@@ -302,7 +315,7 @@ export function useBaseBeautyState(liveID: string) {
       const result = await callNativeAPI<void>('setWhitenessLevel', whitenessParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Set whiteness level failed');
@@ -315,27 +328,27 @@ export function useBaseBeautyState(liveID: string) {
   }, []);
 
   /**
-   * 设置红润级别
+   * Set ruddiness level
    * 
-   * @param params - 红润参数，取值范围[0,9]: 0 表示关闭，9 表示效果最明显
+   * @param params - Ruddiness parameters, value range [0,9]: 0 means off, 9 means most obvious effect
    * @example
    * ```tsx
    * await setRuddyLevel({
    *   ruddyLevel: 4,
-   *   onSuccess: () => console.log('设置成功'),
-   *   onError: (error) => console.error('设置失败:', error)
+   *   onSuccess: () => console.log('Set successfully'),
+   *   onError: (error) => console.error('Set failed:', error)
    * });
    * ```
    */
   const setRuddyLevel = useCallback(async (params: SetRuddyLevelOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (params.ruddyLevel === undefined) {
       const error = new Error('Missing required parameter: ruddyLevel');
       params.onError?.(error);
       return;
     }
 
-    // 验证取值范围
+    // Validate value range
     if (params.ruddyLevel < 0 || params.ruddyLevel > 9) {
       const error = new Error('ruddyLevel must be between 0 and 9');
       params.onError?.(error);
@@ -348,7 +361,7 @@ export function useBaseBeautyState(liveID: string) {
       const result = await callNativeAPI<void>('setRuddyLevel', ruddyParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Set ruddy level failed');
@@ -361,11 +374,11 @@ export function useBaseBeautyState(liveID: string) {
   }, []);
 
   /**
-   * 设置真实 UI 值
-   * 同时更新组件本地状态和全局 store，确保持久化
+   * Set real UI value
+   * Update both component local state and global store to ensure persistence
    * 
-   * @param type - 美颜类型
-   * @param value - 值
+   * @param type - Beauty type
+   * @param value - Value
    * @example
    * ```tsx
    * setRealUiValue('smooth', 5);
@@ -377,17 +390,17 @@ export function useBaseBeautyState(liveID: string) {
         ...prev,
         [type]: value,
       };
-      // 同步更新到全局 store，确保持久化
+      // Sync update to global store to ensure persistence
       baseBeautyStore.setState(liveID, { realUiValues: newValues });
       return newValues;
     });
   }, [liveID]);
 
   /**
-   * 获取真实 UI 值
+   * Get real UI value
    * 
-   * @param type - 美颜类型
-   * @returns 真实 UI 值
+   * @param type - Beauty type
+   * @returns Real UI value
    * @example
    * ```tsx
    * const value = getRealUiValue('smooth');
@@ -398,8 +411,8 @@ export function useBaseBeautyState(liveID: string) {
   }, [realUiValues]);
 
   /**
-   * 重置真实 UI 值
-   * 同时重置组件本地状态和全局 store
+   * Reset real UI values
+   * Reset both component local state and global store
    * 
    * @example
    * ```tsx
@@ -413,20 +426,20 @@ export function useBaseBeautyState(liveID: string) {
       ruddy: 0,
     };
     setRealUiValues(resetValues);
-    // 同步重置到全局 store
+    // Sync reset to global store
     baseBeautyStore.setState(liveID, { realUiValues: resetValues });
   }, [liveID]);
 
   /**
-   * 添加美颜事件监听
+   * Add beauty event listener
    *
-   * @param eventName - 事件名称
-   * @param listener - 事件回调函数
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name
+   * @param listener - Event callback function
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addBeautyListener('onBeautyLevelChanged', (params) => {
-   *   console.log('美颜级别变化:', params);
+   *   console.log('Beauty level changed:', params);
    * });
    * ```
    */
@@ -442,10 +455,10 @@ export function useBaseBeautyState(liveID: string) {
   }, []);
 
   /**
-   * 移除美颜事件监听
+   * Remove beauty event listener
    *
-   * @param eventName - 事件名称
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeBeautyListener('onBeautyLevelChanged');
@@ -463,18 +476,18 @@ export function useBaseBeautyState(liveID: string) {
   }, []);
 
   return {
-    smoothLevel,         // 磨皮级别状态
-    whitenessLevel,      // 美白级别状态
-    ruddyLevel,          // 红润级别状态
-    setSmoothLevel,      // 设置磨皮级别方法
-    setWhitenessLevel,   // 设置美白级别方法
-    setRuddyLevel,       // 设置红润级别方法
-    realUiValues,        // 真实 UI 值
-    setRealUiValue,      // 设置真实 UI 值方法
-    getRealUiValue,      // 获取真实 UI 值方法
-    resetRealUiValues,   // 重置真实 UI 值方法
-    addBeautyListener,   // 添加美颜事件监听
-    removeBeautyListener, // 移除美颜事件监听
+    smoothLevel,         // Smoothing level state
+    whitenessLevel,      // Whitening level state
+    ruddyLevel,          // Ruddiness level state
+    setSmoothLevel,      // Set smoothing level method
+    setWhitenessLevel,   // Set whitening level method
+    setRuddyLevel,       // Set ruddiness level method
+    realUiValues,        // Real UI values
+    setRealUiValue,      // Set real UI value method
+    getRealUiValue,      // Get real UI value method
+    resetRealUiValues,   // Reset real UI values method
+    addBeautyListener,   // Add beauty event listener
+    removeBeautyListener, // Remove beauty event listener
   };
 }
 

@@ -1,11 +1,11 @@
 /**
  * @module LiveSeatState
  * @module_description
- * 直播间麦位管理模块
- * 核心功能：实现多人连麦场景下的座位控制，支持复杂的座位状态管理和音视频设备控制。
- * 技术特点：基于音视频技术，支持多路音视频流管理，提供座位锁定、设备控制、权限管理等高级功能。
- * 业务价值：为多人互动直播提供核心技术支撑，支持PK、连麦、多人游戏等丰富的互动场景。
- * 应用场景：多人连麦、主播PK、互动游戏、在线教育、会议直播等需要多人音视频互动的场景。
+ * Live Seat Management Module
+ * Core Features: Implements seat control in multi-person co-host scenarios, supporting complex seat state management and audio/video device control.
+ * Technical Features: Based on audio/video technology, supports multi-stream audio/video management, providing advanced features such as seat locking, device control, and permission management.
+ * Business Value: Provides core technical support for multi-person interactive live streaming, supporting rich interactive scenarios such as PK, co-hosting, multi-player games, etc.
+ * Use Cases: Multi-person co-hosting, anchor PK, interactive games, online education, conference live streaming, and other scenarios requiring multi-person audio/video interaction.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -31,12 +31,12 @@ import type {
 import { liveSeatStore } from './store';
 
 /**
- * 座位监听器函数类型
+ * Seat listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 座位状态事件名称常量
+ * Seat state event name constants
  */
 const LIVE_SEAT_EVENTS = [
   'seatList',
@@ -45,7 +45,7 @@ const LIVE_SEAT_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -64,7 +64,7 @@ const DEVICE_CONTROL_POLICY_STRING_MAP: Record<string, number> = {
 };
 
 /**
- * 解析 Map 类型（从 JSON 对象或数组转换为 Map）
+ * Parse Map type (convert from JSON object or array to Map)
  */
 function parseMapFromJson(json: string): Map<string, number> | null {
   try {
@@ -75,7 +75,7 @@ function parseMapFromJson(json: string): Map<string, number> | null {
     if (!parsed || typeof parsed !== 'object') {
       return null;
     }
-    // 如果是数组格式 [["key", value], ...]
+    // If array format [["key", value], ...]
     if (Array.isArray(parsed)) {
       const map = new Map<string, number>();
       parsed.forEach(([key, value]: [string, number]) => {
@@ -85,7 +85,7 @@ function parseMapFromJson(json: string): Map<string, number> | null {
       });
       return map;
     }
-    // 如果是对象格式 { "key": value, ... }
+    // If object format { "key": value, ... }
     const map = new Map<string, number>();
     Object.entries(parsed).forEach(([key, value]) => {
       if (typeof value === 'number') {
@@ -102,7 +102,6 @@ function parseMapFromJson(json: string): Map<string, number> | null {
 /**
  * LiveSeatState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useLiveSeatState } from '@/src/atomic-x/state/LiveSeatState';
@@ -120,8 +119,8 @@ function parseMapFromJson(json: string): Map<string, number> | null {
  *     await takeSeat({
  *       liveID: 'your_live_id',
  *       seatIndex: 1,
- *       onSuccess: () => console.log('上麦成功'),
- *       onError: (error) => console.error('上麦失败:', error)
+ *       onSuccess: () => console.log('Take seat successfully'),
+ *       onError: (error) => console.error('Take seat failed:', error)
  *     });
  *   };
  * 
@@ -129,8 +128,8 @@ function parseMapFromJson(json: string): Map<string, number> | null {
  *     <View>
  *       {seatList.map((seat) => (
  *         <View key={seat.index}>
- *           <Text>座位 {seat.index}</Text>
- *           {seat.userInfo && <Text>用户: {seat.userInfo.nickname}</Text>}
+ *           <Text>Seat {seat.index}</Text>
+ *           {seat.userInfo && <Text>User: {seat.userInfo.nickname}</Text>}
  *         </View>
  *       ))}
  *     </View>
@@ -139,45 +138,93 @@ function parseMapFromJson(json: string): Map<string, number> | null {
  * ```
  */
 export function useLiveSeatState(liveID: string) {
-  // 从全局 store 获取初始状态
+  // Get initial state from global store
   const initialState = liveSeatStore.getState(liveID);
 
-  // 座位列表状态 - 使用全局 store 的初始值
+  /**
+   * @memberof module:LiveSeatState
+   * @type {SeatInfo[]}
+   * @example
+   * ```tsx
+   * const { seatList } = useLiveSeatState(liveID);
+   * 
+   * // Display all seat information
+   * seatList.forEach(seat => {
+   *   if (seat.userId) {
+   *     console.log(`Seat ${seat.seatIndex}: ${seat.userName}`);
+   *     console.log('Microphone:', seat.isAudioMuted ? 'Closed' : 'Open');
+   *   } else {
+   *     console.log(`Seat ${seat.seatIndex}: Available`);
+   *   }
+   * });
+   * ```
+   */
   const [seatList, setSeatList] = useState<SeatInfo[]>(initialState.seatList);
 
-  // 画布信息状态 - 使用全局 store 的初始值
+  /**
+   * @memberof module:LiveSeatState
+   * @type {LiveCanvasParams | null}
+   * @example
+   * ```tsx
+   * const { canvas } = useLiveSeatState(liveID);
+   * 
+   * if (canvas) {
+   *   console.log('Canvas mode:', canvas.mode);
+   *   console.log('Background image:', canvas.backgroundUrl);
+   *   console.log('Video stream count:', canvas.videoStreamList?.length);
+   * }
+   * ```
+   */
   const [canvas, setCanvas] = useState<LiveCanvasParams | null>(initialState.canvas);
 
-  // 正在说话的用户列表状态 - 使用全局 store 的初始值
+  /**
+   * @memberof module:LiveSeatState
+   * @type {Map<string, number> | null}
+   * @example
+   * ```tsx
+   * const { speakingUsers } = useLiveSeatState(liveID);
+   * 
+   * // Check if user is speaking
+   * if (speakingUsers?.has(userID)) {
+   *   const volume = speakingUsers.get(userID);
+   *   console.log(`User ${userID} is speaking, volume: ${volume}`);
+   * }
+   * 
+   * // Display all speaking users
+   * speakingUsers?.forEach((volume, userID) => {
+   *   console.log(`${userID}: ${volume}`);
+   * });
+   * ```
+   */
   const [speakingUsers, setSpeakingUsers] = useState<Map<string, number> | null>(initialState.speakingUsers);
 
-  // 订阅全局 store 的状态变化
+  // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
       return;
     }
 
-    // 订阅状态变化
+    // Subscribe to state changes
     const unsubscribe = liveSeatStore.subscribe(liveID, (state) => {
       setSeatList(state.seatList);
       setCanvas(state.canvas);
       setSpeakingUsers(state.speakingUsers);
     });
 
-    // 清理订阅
+    // Clean up subscription
     return unsubscribe;
   }, [liveID]);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理座位状态变化事件
-   * 更新全局 store，store 会自动通知所有订阅者
+   * Handle seat state change events
+   * Update global store, which will automatically notify all subscribers
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -185,7 +232,7 @@ export function useLiveSeatState(liveID: string) {
           : event;
 
 
-      // 检查 data 的 key 是否匹配 LIVE_SEAT_EVENTS 中的某个值
+      // Check if data key matches any value in LIVE_SEAT_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         const updates: {
           seatList?: SeatInfo[];
@@ -197,9 +244,9 @@ export function useLiveSeatState(liveID: string) {
           if (LIVE_SEAT_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'seatList') {
-              // seatList 是数组类型
+              // seatList is an array type
               let parsedData: SeatInfo[];
               if (Array.isArray(value)) {
                 parsedData = value as SeatInfo[];
@@ -210,7 +257,7 @@ export function useLiveSeatState(liveID: string) {
               }
               updates.seatList = parsedData;
             } else if (key === 'canvas') {
-              // canvas 可能是对象或 null
+              // canvas can be an object or null
               let parsedData: LiveCanvasParams | null;
               if (value === null || value === undefined) {
                 parsedData = null;
@@ -223,7 +270,7 @@ export function useLiveSeatState(liveID: string) {
               }
               updates.canvas = parsedData;
             } else if (key === 'speakingUsers') {
-              // speakingUsers 需要特殊解析为 Map
+              // speakingUsers requires special parsing to Map
               let parsedData: Map<string, number> | null;
               if (value === null || value === undefined) {
                 parsedData = null;
@@ -239,7 +286,7 @@ export function useLiveSeatState(liveID: string) {
           }
         });
 
-        // 批量更新全局 store（只更新一次，避免多次通知）
+        // Batch update global store (only update once to avoid multiple notifications)
         if (Object.keys(updates).length > 0) {
           liveSeatStore.setState(liveID, updates);
         }
@@ -251,7 +298,7 @@ export function useLiveSeatState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     if (!liveID) {
@@ -268,14 +315,14 @@ export function useLiveSeatState(liveID: string) {
       };
     };
 
-    // 保存监听器清理函数的引用
+    // Save references to listener cleanup functions
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     LIVE_SEAT_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener will automatically register event listeners on both Native and JS layers
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -290,7 +337,7 @@ export function useLiveSeatState(liveID: string) {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -298,21 +345,21 @@ export function useLiveSeatState(liveID: string) {
   }, [handleEvent, liveID]);
 
   /**
-   * 用户上麦
+   * User takes seat
    * 
-   * @param params - 上麦参数
+   * @param params - Take seat parameters
    * @example
    * ```tsx
    * await takeSeat({
    *   liveID: 'your_live_id',
    *   seatIndex: 1,
-   *   onSuccess: () => console.log('上麦成功'),
-   *   onError: (error) => console.error('上麦失败:', error)
+   *   onSuccess: () => console.log('Take seat successfully'),
+   *   onError: (error) => console.error('Take seat failed:', error)
    * });
    * ```
    */
   const takeSeat = useCallback(async (params: TakeSeatOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (params.seatIndex === undefined) {
       const error = new Error('Missing required parameter: seatIndex');
       params.onError?.(error);
@@ -337,15 +384,15 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 用户下麦
+   * User leaves seat
    * 
-   * @param params - 下麦参数
+   * @param params - Leave seat parameters
    * @example
    * ```tsx
    * await leaveSeat({
    *   liveID: 'your_live_id',
-   *   onSuccess: () => console.log('下麦成功'),
-   *   onError: (error) => console.error('下麦失败:', error)
+   *   onSuccess: () => console.log('Leave seat successfully'),
+   *   onError: (error) => console.error('Leave seat failed:', error)
    * });
    * ```
    */
@@ -368,15 +415,15 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 静音麦克风
+   * Mute microphone
    * 
-   * @param params - 静音参数
+   * @param params - Mute parameters
    * @example
    * ```tsx
    * await muteMicrophone({
    *   liveID: 'your_live_id',
-   *   onSuccess: () => console.log('麦克风静音成功'),
-   *   onError: (error) => console.error('麦克风静音失败:', error)
+   *   onSuccess: () => console.log('Mute microphone successfully'),
+   *   onError: (error) => console.error('Mute microphone failed:', error)
    * });
    * ```
    */
@@ -399,15 +446,15 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 取消静音麦克风
+   * Unmute microphone
    * 
-   * @param params - 取消静音参数
+   * @param params - Unmute parameters
    * @example
    * ```tsx
    * await unmuteMicrophone({
    *   liveID: 'your_live_id',
-   *   onSuccess: () => console.log('麦克风取消静音成功'),
-   *   onError: (error) => console.error('麦克风取消静音失败:', error)
+   *   onSuccess: () => console.log('Unmute microphone successfully'),
+   *   onError: (error) => console.error('Unmute microphone failed:', error)
    * });
    * ```
    */
@@ -430,21 +477,21 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 将用户踢出座位
+   * Kick user out of seat
    * 
-   * @param params - 踢出参数
+   * @param params - Kick parameters
    * @example
    * ```tsx
    * await kickUserOutOfSeat({
    *   liveID: 'your_live_id',
    *   userID: 'user123',
-   *   onSuccess: () => console.log('踢出用户成功'),
-   *   onError: (error) => console.error('踢出用户失败:', error)
+   *   onSuccess: () => console.log('Kick user successfully'),
+   *   onError: (error) => console.error('Kick user failed:', error)
    * });
    * ```
    */
   const kickUserOutOfSeat = useCallback(async (params: KickUserOutOfSeatOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.userID) {
       const error = new Error('Missing required parameter: userID');
       params.onError?.(error);
@@ -469,22 +516,22 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 移动用户到指定座位
+   * Move user to specified seat
    * 
-   * @param params - 移动参数
+   * @param params - Move parameters
    * @example
    * ```tsx
    * await moveUserToSeat({
    *   liveID: 'your_live_id',
    *   fromSeatIndex: 1,
    *   toSeatIndex: 3,
-   *   onSuccess: () => console.log('用户移动成功'),
-   *   onError: (error) => console.error('用户移动失败:', error)
+   *   onSuccess: () => console.log('Move user successfully'),
+   *   onError: (error) => console.error('Move user failed:', error)
    * });
    * ```
    */
   const moveUserToSeat = useCallback(async (params: MoveUserToSeatOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (params.fromSeatIndex === undefined || params.toSeatIndex === undefined) {
       const error = new Error('Missing required parameters: fromSeatIndex or toSeatIndex');
       params.onError?.(error);
@@ -509,21 +556,21 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 锁定座位
+   * Lock seat
    * 
-   * @param params - 锁定参数
+   * @param params - Lock parameters
    * @example
    * ```tsx
    * await lockSeat({
    *   liveID: 'your_live_id',
    *   seatIndex: 2,
-   *   onSuccess: () => console.log('座位锁定成功'),
-   *   onError: (error) => console.error('座位锁定失败:', error)
+   *   onSuccess: () => console.log('Lock seat successfully'),
+   *   onError: (error) => console.error('Lock seat failed:', error)
    * });
    * ```
    */
   const lockSeat = useCallback(async (params: LockSeatOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (params.seatIndex === undefined) {
       const error = new Error('Missing required parameter: seatIndex');
       params.onError?.(error);
@@ -548,21 +595,21 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 解锁座位
+   * Unlock seat
    * 
-   * @param params - 解锁参数
+   * @param params - Unlock parameters
    * @example
    * ```tsx
    * await unlockSeat({
    *   liveID: 'your_live_id',
    *   seatIndex: 2,
-   *   onSuccess: () => console.log('座位解锁成功'),
-   *   onError: (error) => console.error('座位解锁失败:', error)
+   *   onSuccess: () => console.log('Unlock seat successfully'),
+   *   onError: (error) => console.error('Unlock seat failed:', error)
    * });
    * ```
    */
   const unlockSeat = useCallback(async (params: UnlockSeatOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (params.seatIndex === undefined) {
       const error = new Error('Missing required parameter: seatIndex');
       params.onError?.(error);
@@ -587,21 +634,21 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 开启远程摄像头
+   * Open remote camera
    * 
-   * @param params - 开启摄像头参数
+   * @param params - Open camera parameters
    * @example
    * ```tsx
    * await openRemoteCamera({
    *   liveID: 'your_live_id',
    *   userID: 'user123',
-   *   onSuccess: () => console.log('远程摄像头开启成功'),
-   *   onError: (error) => console.error('远程摄像头开启失败:', error)
+   *   onSuccess: () => console.log('Open remote camera successfully'),
+   *   onError: (error) => console.error('Open remote camera failed:', error)
    * });
    * ```
    */
   const openRemoteCamera = useCallback(async (params: OpenRemoteCameraOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.userID) {
       const error = new Error('Missing required parameter: userID');
       params.onError?.(error);
@@ -630,21 +677,21 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 关闭远程摄像头
+   * Close remote camera
    * 
-   * @param params - 关闭摄像头参数
+   * @param params - Close camera parameters
    * @example
    * ```tsx
    * await closeRemoteCamera({
    *   liveID: 'your_live_id',
    *   userID: 'user123',
-   *   onSuccess: () => console.log('远程摄像头关闭成功'),
-   *   onError: (error) => console.error('远程摄像头关闭失败:', error)
+   *   onSuccess: () => console.log('Close remote camera successfully'),
+   *   onError: (error) => console.error('Close remote camera failed:', error)
    * });
    * ```
    */
   const closeRemoteCamera = useCallback(async (params: CloseRemoteCameraOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.userID) {
       const error = new Error('Missing required parameter: userID');
       params.onError?.(error);
@@ -669,22 +716,22 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 开启远程麦克风
+   * Open remote microphone
    * 
-   * @param params - 开启麦克风参数
+   * @param params - Open microphone parameters
    * @example
    * ```tsx
    * await openRemoteMicrophone({
    *   liveID: 'your_live_id',
    *   userID: 'user123',
    *   policy: 'UNLOCK_ONLY',
-   *   onSuccess: () => console.log('远程麦克风开启成功'),
-   *   onError: (error) => console.error('远程麦克风开启失败:', error)
+   *   onSuccess: () => console.log('Open remote microphone successfully'),
+   *   onError: (error) => console.error('Open remote microphone failed:', error)
    * });
    * ```
    */
   const openRemoteMicrophone = useCallback(async (params: OpenRemoteMicrophoneOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.userID) {
       const error = new Error('Missing required parameter: userID');
       params.onError?.(error);
@@ -713,21 +760,21 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 关闭远程麦克风
+   * Close remote microphone
    * 
-   * @param params - 关闭麦克风参数
+   * @param params - Close microphone parameters
    * @example
    * ```tsx
    * await closeRemoteMicrophone({
    *   liveID: 'your_live_id',
    *   userID: 'user123',
-   *   onSuccess: () => console.log('远程麦克风关闭成功'),
-   *   onError: (error) => console.error('远程麦克风关闭失败:', error)
+   *   onSuccess: () => console.log('Close remote microphone successfully'),
+   *   onError: (error) => console.error('Close remote microphone failed:', error)
    * });
    * ```
    */
   const closeRemoteMicrophone = useCallback(async (params: CloseRemoteMicrophoneOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.userID) {
       const error = new Error('Missing required parameter: userID');
       params.onError?.(error);
@@ -752,15 +799,15 @@ export function useLiveSeatState(liveID: string) {
   }, []);
 
   /**
-   * 添加座位事件监听
+   * Add seat event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onLocalCameraOpenedByAdmin'(本地摄像头被管理员开启)<br>'onLocalCameraClosedByAdmin'(本地摄像头被管理员关闭)<br>'onLocalMicrophoneOpenedByAdmin'(本地麦克风被管理员开启)<br>'onLocalMicrophoneClosedByAdmin'(本地麦克风被管理员关闭)
-   * @param listener - 事件处理函数
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, options: 'onLocalCameraOpenedByAdmin' (local camera opened by admin)<br>'onLocalCameraClosedByAdmin' (local camera closed by admin)<br>'onLocalMicrophoneOpenedByAdmin' (local microphone opened by admin)<br>'onLocalMicrophoneClosedByAdmin' (local microphone closed by admin)
+   * @param listener - Event handler function
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addLiveSeatEventListener('onLocalCameraOpenedByAdmin', (params) => {
-   *   console.log('本地摄像头被管理员开启:', params);
+   *   console.log('Local camera opened by admin:', params);
    * });
    * ```
    */
@@ -776,10 +823,10 @@ export function useLiveSeatState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 移除座位事件监听
+   * Remove seat event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onLocalCameraOpenedByAdmin'(本地摄像头被管理员开启)<br>'onLocalCameraClosedByAdmin'(本地摄像头被管理员关闭)<br>'onLocalMicrophoneOpenedByAdmin'(本地麦克风被管理员开启)<br>'onLocalMicrophoneClosedByAdmin'(本地麦克风被管理员关闭)
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, options: 'onLocalCameraOpenedByAdmin' (local camera opened by admin)<br>'onLocalCameraClosedByAdmin' (local camera closed by admin)<br>'onLocalMicrophoneOpenedByAdmin' (local microphone opened by admin)<br>'onLocalMicrophoneClosedByAdmin' (local microphone closed by admin)
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeLiveSeatEventListener('onLocalCameraOpenedByAdmin');
@@ -797,23 +844,23 @@ export function useLiveSeatState(liveID: string) {
   }, [liveID]);
 
   return {
-    seatList,                    // 座位列表
-    canvas,                      // 画布信息
-    speakingUsers,               // 正在说话的用户列表
-    takeSeat,                    // 用户上麦
-    leaveSeat,                   // 用户下麦
-    muteMicrophone,              // 静音麦克风
-    unmuteMicrophone,            // 取消静音麦克风
-    kickUserOutOfSeat,           // 将用户踢出座位
-    moveUserToSeat,              // 移动用户到指定座位
-    lockSeat,                    // 锁定座位
-    unlockSeat,                  // 解锁座位
-    openRemoteCamera,            // 开启远程摄像头
-    closeRemoteCamera,           // 关闭远程摄像头
-    openRemoteMicrophone,        // 开启远程麦克风
-    closeRemoteMicrophone,       // 关闭远程麦克风
-    addLiveSeatEventListener,    // 添加座位事件监听
-    removeLiveSeatEventListener,  // 移除座位事件监听
+    seatList,                    // Seat list
+    canvas,                      // Canvas information
+    speakingUsers,               // Speaking users list
+    takeSeat,                    // User takes seat
+    leaveSeat,                   // User leaves seat
+    muteMicrophone,              // Mute microphone
+    unmuteMicrophone,            // Unmute microphone
+    kickUserOutOfSeat,           // Kick user out of seat
+    moveUserToSeat,              // Move user to specified seat
+    lockSeat,                    // Lock seat
+    unlockSeat,                  // Unlock seat
+    openRemoteCamera,            // Open remote camera
+    closeRemoteCamera,           // Close remote camera
+    openRemoteMicrophone,        // Open remote microphone
+    closeRemoteMicrophone,       // Close remote microphone
+    addLiveSeatEventListener,    // Add seat event listener
+    removeLiveSeatEventListener,  // Remove seat event listener
   };
 }
 

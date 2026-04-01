@@ -61,6 +61,7 @@ class SVGAAnimationView: UIView {
         
         self.playerView = player
         
+        // 异步加载并播放动画
         DispatchQueue.global().async { [weak self] in
             guard let self = self else { return }
             let url: URL?
@@ -78,6 +79,7 @@ class SVGAAnimationView: UIView {
                 return
             }
             
+            // 加载数据
             var animationData: Data?
             do {
                 animationData = try Data(contentsOf: validUrl)
@@ -117,6 +119,7 @@ class SVGAAnimationView: UIView {
     }
 }
 
+// MARK: - SVGAPlayerDelegate
 extension SVGAAnimationView: SVGAPlayerDelegate {
     func svgaPlayerDidFinishedAnimation(_ player: SVGAPlayer) {
         print("SVGAAnimationView: onFinished")

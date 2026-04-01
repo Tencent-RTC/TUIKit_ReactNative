@@ -1,11 +1,11 @@
 /**
  * @module LoginState
  * @module_description
- * 用户身份认证与登录管理模块
- * 核心功能：负责用户身份验证、登录状态管理、用户信息维护等基础认证服务。
- * 技术特点：支持多种认证方式、会话管理、权限验证等高级功能，确保用户身份的安全和有效。
- * 业务价值：为直播平台提供基础的用户认证能力，是所有其他业务模块的前置条件。
- * 应用场景：用户登录、身份验证、会话管理、权限控制等基础认证场景。
+ * User Authentication and Login Management Module
+ * Core Features: Responsible for user identity verification, login state management, user information maintenance, and other basic authentication services.
+ * Technical Features: Supports multiple authentication methods, session management, permission verification, and other advanced features to ensure user identity security and validity.
+ * Business Value: Provides basic user authentication capabilities for live streaming platforms, serving as a prerequisite for all other business modules.
+ * Use Cases: User login, identity verification, session management, permission control, and other basic authentication scenarios.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -23,12 +23,12 @@ import { validateRequired } from '../../utils';
 import { loginStore } from './store';
 
 /**
- * 登录监听器函数类型
+ * Login listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 登录状态事件名称常量
+ * Login state event name constants
  */
 const LOGIN_EVENTS = [
   'loginUserInfo',
@@ -36,7 +36,7 @@ const LOGIN_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -65,41 +65,74 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *       sdkAppID: 1400000000,
  *       userID: 'user123',
  *       userSig: 'eJx1kF1PwzAMhv9KlG...',
- *       onSuccess: () => console.log('登录成功'),
- *       onError: (error) => console.error('登录失败:', error)
+ *       onSuccess: () => console.log('Login successfully'),
+ *       onError: (error) => console.error('Login failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       {loginUserInfo && <Text>当前用户: {loginUserInfo.nickname}</Text>}
- *       <Button onPress={handleLogin} title="登录" />
+ *       {loginUserInfo && <Text>Current user: {loginUserInfo.nickname}</Text>}
+ *       <Button onPress={handleLogin} title="Login" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useLoginState() {
-  // 从全局 store 获取初始状态，确保后挂载组件也能拿到已有登录态
+  // Get initial state from global store, ensuring late-mounted components can access existing login state
   const initialState = loginStore.getState();
 
-  // 当前登录用户信息（由全局 store 驱动）
+  /**
+   * @memberof module:LoginState
+   * @type {UserProfileParam | undefined}
+   * @example
+   * ```tsx
+   * const { loginUserInfo } = useLoginState();
+   * 
+   * if (loginUserInfo) {
+   *   console.log('Current user:', loginUserInfo.nickname);
+   *   console.log('User ID:', loginUserInfo.userID);
+   * } else {
+   *   console.log('User not logged in');
+   * }
+   * ```
+   */
   const [loginUserInfo, setLoginUserInfo] = useState<UserProfileParam | undefined>(
     initialState.loginUserInfo,
   );
 
-  // 当前登录状态（由全局 store 驱动）
+  /**
+   * @memberof module:LoginState
+   * @type {LoginStatus}
+   * @example
+   * ```tsx
+   * const { loginStatus } = useLoginState();
+   * 
+   * switch (loginStatus) {
+   *   case 'LOGINED':
+   *     console.log('User logged in');
+   *     break;
+   *   case 'LOGOUT':
+   *     console.log('User logged out');
+   *     break;
+   *   case 'UNLOGIN':
+   *     console.log('User not logged in');
+   *     break;
+   * }
+   * ```
+   */
   const [loginStatus, setLoginStatus] = useState<LoginStatus>(initialState.loginStatus);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理登录状态变化事件
+   * Handle login state change events
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -108,15 +141,15 @@ export function useLoginState() {
 
       console.log(`[LoginState] ${eventName} event received:`, JSON.stringify(data));
 
-      // 检查 data 的 key 是否匹配 LOGIN_EVENTS 中的某个值
+      // Check if data key matches any value in LOGIN_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         Object.keys(data).forEach((key) => {
           if (LOGIN_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'loginUserInfo') {
-              // loginUserInfo 是对象类型
+              // loginUserInfo is an object type
               let parsedData: UserProfileParam;
               if (value && typeof value === 'object' && !Array.isArray(value)) {
                 parsedData = value as UserProfileParam;
@@ -126,14 +159,14 @@ export function useLoginState() {
                 parsedData = safeJsonParse<UserProfileParam>(JSON.stringify(value), {} as UserProfileParam);
               }
               if (parsedData?.userID) {
-                // 更新全局 store，由 store 统一驱动所有 hook 实例
+                // Update global store, which drives all hook instances uniformly
                 loginStore.setState({
                   loginUserInfo: parsedData,
                   loginStatus: 'LOGINED',
                 });
               }
             } else if (key === 'loginStatus') {
-              // loginStatus 是字符串类型
+              // loginStatus is a string type
               let parsedData: LoginStatus;
               if (typeof value === 'string') {
                 parsedData = value as LoginStatus;
@@ -142,10 +175,10 @@ export function useLoginState() {
               } else {
                 parsedData = safeJsonParse<LoginStatus>(JSON.stringify(value), 'UNLOGIN');
               }
-              // 更新全局 store，由 store 统一驱动所有 hook 实例
+              // Update global store, which drives all hook instances uniformly
               loginStore.setState({
                 loginStatus: parsedData,
-                // 如果 Native 同时下发 loginUserInfo，可在下次事件中覆盖；这里不主动清空
+                // If Native sends loginUserInfo at the same time, it can be overwritten in the next event; don't clear it actively here
               });
             }
           }
@@ -158,8 +191,8 @@ export function useLoginState() {
   }, []);
 
   /**
-   * 订阅全局 loginStore 的变化，驱动本地 state
-   * 确保多个组件之间共享同一份登录态
+   * Subscribe to global loginStore changes to drive local state
+   * Ensures multiple components share the same login state
    */
   useEffect(() => {
     const unsubscribe = loginStore.subscribe((state) => {
@@ -170,7 +203,7 @@ export function useLoginState() {
   }, []);
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
@@ -183,14 +216,14 @@ export function useLoginState() {
       };
     };
 
-    // 保存监听器清理函数的引用
+    // Save references to listener cleanup functions
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     LOGIN_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener will automatically register event listeners on both Native and JS layers
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -205,7 +238,7 @@ export function useLoginState() {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -213,23 +246,23 @@ export function useLoginState() {
   }, [handleEvent]);
 
   /**
-   * 登录方法
+   * Login method
    * 
    * @memberof module:LoginState
-   * @param {LoginOptions} params - 登录参数
+   * @param {LoginOptions} params - Login parameters
    * @example
    * ```tsx
    * await login({
    *   sdkAppID: 1400000000,
    *   userID: 'user123',
    *   userSig: 'eJx1kF1PwzAMhv9KlG...',
-   *   onSuccess: () => console.log('登录成功'),
-   *   onError: (error) => console.error('登录失败:', error)
+   *   onSuccess: () => console.log('Login successfully'),
+   *   onError: (error) => console.error('Login failed:', error)
    * });
    * ```
    */
   const login = useCallback(async (params: LoginOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     const validation = validateRequired(params, ['userID', 'sdkAppID', 'userSig']);
     if (!validation.valid) {
       const error = new Error(`Missing required parameters: ${validation.missing?.join(', ')}`);
@@ -237,14 +270,14 @@ export function useLoginState() {
       return;
     }
 
-    // 提取回调函数
+    // Extract callback functions
     const { onSuccess, onError, ...loginParams } = params;
 
     try {
       const result = await callNativeAPI<UserProfileParam>('login', loginParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Login failed');
@@ -257,15 +290,15 @@ export function useLoginState() {
   }, []);
 
   /**
-   * 登出方法
+   * Logout method
    * 
    * @memberof module:LoginState
-   * @param {LogoutOptions} params - 登出参数（可选）
+   * @param {LogoutOptions} params - Logout parameters (optional)
    * @example
    * ```tsx
    * await logout({
-   *   onSuccess: () => console.log('登出成功'),
-   *   onError: (error) => console.error('登出失败:', error)
+   *   onSuccess: () => console.log('Logout successfully'),
+   *   onError: (error) => console.error('Logout failed:', error)
    * });
    * ```
    */
@@ -276,7 +309,7 @@ export function useLoginState() {
       const result = await callNativeAPI<void>('logout', logoutParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Logout failed');
@@ -289,39 +322,39 @@ export function useLoginState() {
   }, []);
 
   /**
-   * 设置用户信息
+   * Set user information
    * 
    * @memberof module:LoginState
-   * @param {SetSelfInfoOptions} userInfo - 用户信息
+   * @param {SetSelfInfoOptions} userInfo - User information
    * @example
    * ```tsx
    * await setSelfInfo({
    *   userProfile: {
    *     userID: 'user123',
-   *     nickname: '张三',
+   *     nickname: 'Zhang San',
    *     avatarURL: 'https://example.com/avatar.jpg',
    *   },
-   *   onSuccess: () => console.log('用户信息设置成功'),
-   *   onError: (error) => console.error('用户信息设置失败:', error)
+   *   onSuccess: () => console.log('Set user info successfully'),
+   *   onError: (error) => console.error('Set user info failed:', error)
    * });
    * ```
    */
   const setSelfInfo = useCallback(async (userInfo: SetSelfInfoOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!userInfo.userProfile || !userInfo.userProfile.userID) {
       const error = new Error('Missing required parameter: userProfile.userID');
       userInfo.onError?.(error);
       return;
     }
 
-    // 提取回调函数
+    // Extract callback functions
     const { onSuccess, onError, ...infoParams } = userInfo;
 
     try {
       const result = await callNativeAPI<UserProfileParam>('setSelfInfo', infoParams);
 
       if (result.success) {
-        // 成功时只触发回调，状态更新由事件监听器处理
+        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
         const error = new Error(result.error || 'Set self info failed');
@@ -334,15 +367,15 @@ export function useLoginState() {
   }, []);
 
   /**
-   * 获取登录用户信息
+   * Get login user information
    * 
    * @memberof module:LoginState
-   * @returns {UserProfileParam | undefined} 当前登录用户信息，如果未登录则返回 undefined
+   * @returns {UserProfileParam | undefined} Current login user information, returns undefined if not logged in
    * @example
    * ```tsx
    * const userInfo = getLoginUserInfo();
    * if (userInfo) {
-   *   console.log('当前用户:', userInfo.nickname);
+   *   console.log('Current user:', userInfo.nickname);
    * }
    * ```
    */
@@ -351,16 +384,16 @@ export function useLoginState() {
   }, [loginUserInfo]);
 
   /**
-   * 添加登录事件监听
+   * Add login event listener
    *
    * @memberof module:LoginState
-   * @param {string} eventName - 事件名称
-   * @param {Function} listener - 事件回调函数
-   * @param {string} listenerID - 监听器ID（可选）
+   * @param {string} eventName - Event name
+   * @param {Function} listener - Event callback function
+   * @param {string} listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addLoginListener('onLoginStatusChanged', (params) => {
-   *   console.log('登录状态变化:', params);
+   *   console.log('Login status changed:', params);
    * });
    * ```
    */
@@ -376,11 +409,11 @@ export function useLoginState() {
   }, []);
 
   /**
-   * 移除登录事件监听
+   * Remove login event listener
    *
    * @memberof module:LoginState
-   * @param {string} eventName - 事件名称
-   * @param {string} listenerID - 监听器ID（可选）
+   * @param {string} eventName - Event name
+   * @param {string} listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeLoginListener('onLoginStatusChanged');
@@ -398,14 +431,14 @@ export function useLoginState() {
   }, []);
 
   return {
-    loginUserInfo,      // 当前登录用户信息
-    loginStatus,        // 当前登录状态
-    login,              // 登录方法
-    logout,             // 登出方法
-    setSelfInfo,        // 设置用户信息
-    getLoginUserInfo,   // 获取登录用户信息
-    addLoginListener,   // 添加登录事件监听
-    removeLoginListener, // 移除登录事件监听
+    loginUserInfo,      // Current login user information
+    loginStatus,        // Current login status
+    login,              // Login method
+    logout,             // Logout method
+    setSelfInfo,        // Set user information
+    getLoginUserInfo,   // Get login user information
+    addLoginListener,   // Add login event listener
+    removeLoginListener, // Remove login event listener
   };
 }
 

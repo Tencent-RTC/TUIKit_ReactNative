@@ -1,11 +1,11 @@
 /**
  * @module CoGuestState
  * @module_description
- * 直播连麦管理相关接口
- * 核心功能：处理观众与主播之间的连麦互动，管理连麦申请、邀请、接受、拒绝等完整的连麦流程。
- * 技术特点：基于音视频技术，支持连麦状态实时同步、音视频质量自适应、网络状况监控等高级功能。
- * 业务价值：为直播平台提供观众参与互动的核心能力，增强用户粘性和直播趣味性。
- * 应用场景：观众连麦、互动问答、在线K歌、游戏直播等需要观众参与的互动场景。
+ * Live Co-Guest Management Interface
+ * Core Features: Handles co-guest interaction between audience and streamers, managing co-guest applications, invitations, acceptance, rejection, and complete co-guest processes.
+ * Technical Highlights: Based on audio-video technology, supports real-time co-guest state synchronization, adaptive audio-video quality, network condition monitoring, and other advanced features.
+ * Business Value: Provides core capabilities for audience participation and interaction on live streaming platforms, enhancing user engagement and live entertainment.
+ * Application Scenarios: Audience co-guest, interactive Q&A, online karaoke, game streaming, and other scenarios requiring audience participation.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -28,12 +28,12 @@ import type {
 import { coGuestStore } from './store';
 
 /**
- * 连麦监听器函数类型
+ * Co-guest listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 连麦状态事件名称常量
+ * Co-guest state event name constants
  */
 const CO_GUEST_EVENTS = [
   'connected',
@@ -43,7 +43,7 @@ const CO_GUEST_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safe JSON parse
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -60,7 +60,6 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 /**
  * CoGuestState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useCoGuestState } from '@/src/atomic-x/state/CoGuestState';
@@ -78,44 +77,92 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *     await applyForSeat({
  *       seatIndex: 2,
  *       timeout: 10,
- *       onSuccess: () => console.log('申请成功'),
- *       onError: (error) => console.error('申请失败:', error)
+ *       onSuccess: () => console.log('Application successful'),
+ *       onError: (error) => console.error('Application failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       <Text>已连接嘉宾: {connected.length}</Text>
- *       <Text>申请用户: {applicants.length}</Text>
- *       <Button onPress={handleApplyForSeat} title="申请连麦" />
+ *       <Text>Connected Guests: {connected.length}</Text>
+ *       <Text>Applicants: {applicants.length}</Text>
+ *       <Button onPress={handleApplyForSeat} title="Apply for Co-guest" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useCoGuestState(liveID: string) {
-  // 从全局 store 获取初始状态
+  // Get initial state from global store
   const initialState = coGuestStore.getState(liveID);
 
-  // 已连接的连麦嘉宾列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoGuestState
+   * @type {SeatUserInfoParam[]}
+   * @example
+   * ```tsx
+   * const { connected } = useCoGuestState(liveID);
+   * 
+   * console.log('Connected guests count:', connected.length);
+   * connected.forEach(guest => {
+   *   console.log('Guest:', guest.userName, 'Seat:', guest.seatIndex);
+   * });
+   * ```
+   */
   const [connected, setConnected] = useState<SeatUserInfoParam[]>(initialState.connected);
 
-  // 被邀请上麦的用户列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoGuestState
+   * @type {LiveUserInfoParam[]}
+   * @example
+   * ```tsx
+   * const { invitees } = useCoGuestState(liveID);
+   * 
+   * console.log('Invited users count:', invitees.length);
+   * invitees.forEach(user => {
+   *   console.log('Invited user:', user.nickname, user.userID);
+   * });
+   * ```
+   */
   const [invitees, setInvitees] = useState<LiveUserInfoParam[]>(initialState.invitees);
 
-  // 申请上麦的用户列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoGuestState
+   * @type {LiveUserInfoParam[]}
+   * @example
+   * ```tsx
+   * const { applicants } = useCoGuestState(liveID);
+   * 
+   * console.log('Applicants count:', applicants.length);
+   * applicants.forEach(user => {
+   *   console.log('Applicant:', user.nickname, user.userID);
+   * });
+   * ```
+   */
   const [applicants, setApplicants] = useState<LiveUserInfoParam[]>(initialState.applicants);
 
-  // 可邀请上麦的候选用户列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoGuestState
+   * @type {LiveUserInfoParam[]}
+   * @example
+   * ```tsx
+   * const { candidates } = useCoGuestState(liveID);
+   * 
+   * console.log('Candidates count:', candidates.length);
+   * candidates.forEach(user => {
+   *   console.log('Candidate:', user.nickname, user.userID);
+   * });
+   * ```
+   */
   const [candidates, setCandidates] = useState<LiveUserInfoParam[]>(initialState.candidates);
 
-  // 订阅全局 store 的状态变化
+  // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
       return;
     }
 
-    // 订阅状态变化
+    // Subscribe to state changes
     const unsubscribe = coGuestStore.subscribe(liveID, (state) => {
       setConnected(state.connected);
       setInvitees(state.invitees);
@@ -123,16 +170,16 @@ export function useCoGuestState(liveID: string) {
       setCandidates(state.candidates);
     });
 
-    // 清理订阅
+    // Clean up subscription
     return unsubscribe;
   }, [liveID]);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理连麦状态变化事件
-   * 更新全局 store，store 会自动通知所有订阅者
+   * Handle co-guest state change events
+   * Update global store, store will automatically notify all subscribers
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {

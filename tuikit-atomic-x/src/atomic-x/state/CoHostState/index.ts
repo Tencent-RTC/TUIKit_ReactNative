@@ -1,11 +1,11 @@
 /**
  * @module CoHostState
  * @module_description
- * 连线主播管理模块
- * 核心功能：实现主播间的连线功能，支持主播邀请、连线申请、连线状态管理等主播间互动功能。
- * 技术特点：支持多主播音视频同步、画中画显示、音视频质量优化等高级技术，确保连线体验的流畅性。
- * 业务价值：为直播平台提供主播间协作的核心能力，支持PK、合作直播等高级业务场景。
- * 应用场景：主播连线、合作直播、跨平台连线、主播互动等高级直播场景。
+ * Co-host Management Module
+ * Core Features: Implements connection functionality between streamers, supporting host invitations, connection requests, and connection status management.
+ * Technical Features: Supports multi-host audio/video synchronization, picture-in-picture display, and audio/video quality optimization to ensure smooth connection experience.
+ * Business Value: Provides core collaboration capabilities between streamers, supporting advanced scenarios like PK battles and collaborative streaming.
+ * Use Cases: Host connections, collaborative streaming, cross-platform connections, and streamer interactions.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -24,12 +24,12 @@ import type {
 import { CoHostStatus } from './types';
 
 /**
- * 连线监听器函数类型
+ * Co-host listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 连线状态事件名称常量
+ * Co-host status event name constants
  */
 const CO_HOST_EVENTS = [
   'connected',
@@ -40,7 +40,7 @@ const CO_HOST_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safely parse JSON
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
   try {
@@ -57,7 +57,6 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 /**
  * CoHostState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useCoHostState } from '@/src/atomic-x/state/CoHostState';
@@ -74,47 +73,106 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *   const handleRequestConnection = async () => {
  *     await requestHostConnection({
  *       liveID: 'your_live_id',
- *       onSuccess: () => console.log('请求连线成功'),
- *       onError: (error) => console.error('请求连线失败:', error)
+ *       onSuccess: () => console.log('Request connection successfully'),
+ *       onError: (error) => console.error('Request connection failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       <Text>已连接主播: {connected.length}</Text>
- *       {applicant && <Text>申请主播: {applicant.nickname}</Text>}
- *       <Button onPress={handleRequestConnection} title="请求连线" />
+ *       <Text>Connected hosts: {connected.length}</Text>
+ *       {applicant && <Text>Applicant host: {applicant.nickname}</Text>}
+ *       <Button onPress={handleRequestConnection} title="Request Connection" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useCoHostState(liveID: string) {
-  // 从全局 store 获取初始状态
+  // Get initial state from global store
   const initialState = coHostStore.getState(liveID);
 
-  // 已连接的连线主播列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoHostState
+   * @type {LiveUserInfoParam[]}
+   * @example
+   * ```tsx
+   * const { connected } = useCoHostState(liveID);
+   * 
+   * console.log('Connected hosts count:', connected.length);
+   * connected.forEach(host => {
+   *   console.log('Host:', host.nickname, host.userID);
+   * });
+   * ```
+   */
   const [connected, setConnected] = useState<LiveUserInfoParam[]>(initialState.connected);
 
-  // 被邀请连线的主播列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoHostState
+   * @type {LiveUserInfoParam[]}
+   * @example
+   * ```tsx
+   * const { invitees } = useCoHostState(liveID);
+   * 
+   * console.log('Invited hosts count:', invitees.length);
+   * invitees.forEach(host => {
+   *   console.log('Invited host:', host.nickname, host.userID);
+   * });
+   * ```
+   */
   const [invitees, setInvitees] = useState<LiveUserInfoParam[]>(initialState.invitees);
 
-  // 当前申请连线的主播信息 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoHostState
+   * @type {LiveUserInfoParam | undefined}
+   * @example
+   * ```tsx
+   * const { applicant } = useCoHostState(liveID);
+   * 
+   * if (applicant) {
+   *   console.log('Applicant host:', applicant.nickname, applicant.userID);
+   * }
+   * ```
+   */
   const [applicant, setApplicant] = useState<LiveUserInfoParam | undefined>(initialState.applicant);
 
-  // 可邀请连线的候选主播列表 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoHostState
+   * @type {LiveUserInfoParam[]}
+   * @example
+   * ```tsx
+   * const { candidates } = useCoHostState(liveID);
+   * 
+   * console.log('Candidate hosts count:', candidates.length);
+   * candidates.forEach(host => {
+   *   console.log('Candidate host:', host.nickname, host.userID);
+   * });
+   * ```
+   */
   const [candidates, setCandidates] = useState<LiveUserInfoParam[]>(initialState.candidates);
 
-  // 当前连线状态 - 使用全局 store 的初始值
+  /**
+   * @memberof module:CoHostState
+   * @type {CoHostStatus}
+   * @example
+   * ```tsx
+   * const { coHostStatus } = useCoHostState(liveID);
+   * 
+   * console.log('Current co-host status:', coHostStatus);
+   * if (coHostStatus === CoHostStatus.CONNECTED) {
+   *   console.log('Connected');
+   * }
+   * ```
+   */
   const [coHostStatus, setCoHostStatus] = useState<CoHostStatus>(initialState.coHostStatus);
 
-  // 订阅全局 store 的状态变化
+  // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
       return;
     }
 
-    // 订阅状态变化
+    // Subscribe to state changes
     const unsubscribe = coHostStore.subscribe(liveID, (state) => {
       setConnected(state.connected);
       setInvitees(state.invitees);
@@ -123,20 +181,20 @@ export function useCoHostState(liveID: string) {
       setCoHostStatus(state.coHostStatus);
     });
 
-    // 清理订阅
+    // Clean up subscription
     return unsubscribe;
   }, [liveID]);
 
-  // 事件监听器引用
+  // Event listener references
   type WritableMap = Record<string, unknown>;
 
   /**
-   * 处理连线状态变化事件
-   * 更新全局 store，store 会自动通知所有订阅者
+   * Handle co-host status change events
+   * Updates global store, which automatically notifies all subscribers
    */
   const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
     try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
+      // If event is already an object, use it directly; otherwise try to parse
       const data = event && typeof event === 'object' && !Array.isArray(event)
         ? event
         : typeof event === 'string'
@@ -145,7 +203,7 @@ export function useCoHostState(liveID: string) {
 
       console.log(`[CoHostState] ${eventName} event received:`, JSON.stringify(data));
 
-      // 检查 data 的 key 是否匹配 CO_HOST_EVENTS 中的某个值
+      // Check if data's keys match any value in CO_HOST_EVENTS
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         const updates: {
           connected?: LiveUserInfoParam[];
@@ -159,9 +217,9 @@ export function useCoHostState(liveID: string) {
           if (CO_HOST_EVENTS.includes(key)) {
             const value = data[key];
 
-            // 根据不同的 key 更新对应的响应式数据
+            // Update corresponding reactive data based on different keys
             if (key === 'connected') {
-              // connected 是数组类型
+              // connected is array type
               let parsedData: LiveUserInfoParam[];
               if (Array.isArray(value)) {
                 parsedData = value as LiveUserInfoParam[];
@@ -172,7 +230,7 @@ export function useCoHostState(liveID: string) {
               }
               updates.connected = parsedData;
             } else if (key === 'invitees') {
-              // invitees 是数组类型
+              // invitees is array type
               let parsedData: LiveUserInfoParam[];
               if (Array.isArray(value)) {
                 parsedData = value as LiveUserInfoParam[];
@@ -183,7 +241,7 @@ export function useCoHostState(liveID: string) {
               }
               updates.invitees = parsedData;
             } else if (key === 'applicant') {
-              // applicant 可能是对象或 null
+              // applicant can be object or null
               let parsedData: LiveUserInfoParam | undefined;
               if (value === null || value === undefined) {
                 parsedData = undefined;
@@ -198,7 +256,7 @@ export function useCoHostState(liveID: string) {
               }
               updates.applicant = parsedData;
             } else if (key === 'candidates') {
-              // candidates 是数组类型
+              // candidates is array type
               let parsedData: LiveUserInfoParam[];
               if (Array.isArray(value)) {
                 parsedData = value as LiveUserInfoParam[];
@@ -209,7 +267,7 @@ export function useCoHostState(liveID: string) {
               }
               updates.candidates = parsedData;
             } else if (key === 'coHostStatus') {
-              // coHostStatus 是枚举类型
+              // coHostStatus is enum type
               const numValue = typeof value === 'number' ? value : (Number(value) || CoHostStatus.DISCONNECTED);
               const parsedData = isNaN(numValue) ? CoHostStatus.DISCONNECTED : (numValue as CoHostStatus);
               updates.coHostStatus = parsedData;
@@ -217,7 +275,7 @@ export function useCoHostState(liveID: string) {
           }
         });
 
-        // 批量更新全局 store（只更新一次，避免多次通知）
+        // Batch update global store (only update once to avoid multiple notifications)
         if (Object.keys(updates).length > 0) {
           coHostStore.setState(liveID, updates);
         }
@@ -229,7 +287,7 @@ export function useCoHostState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 绑定事件监听
+   * Bind event listeners
    */
   useEffect(() => {
     if (!liveID) {
@@ -246,14 +304,14 @@ export function useCoHostState(liveID: string) {
       };
     };
 
-    // 保存监听器清理函数的引用
+    // Save references to listener cleanup functions
     const cleanupFunctions: Array<{ remove: () => void }> = [];
 
     CO_HOST_EVENTS.forEach((eventName) => {
       const keyObject = createListenerKeyObject(eventName);
       const key = JSON.stringify(keyObject);
       console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
+      // addListener automatically registers event listeners for both Native side and JS layer
       const subscription = addListener(key, handleEvent(eventName));
       if (subscription) {
         cleanupFunctions.push(subscription);
@@ -268,7 +326,7 @@ export function useCoHostState(liveID: string) {
         const key = JSON.stringify(keyObject);
         removeListener(key);
       });
-      // 同时清理 JS 层的订阅
+      // Also clean up JS layer subscriptions
       cleanupFunctions.forEach((cleanup) => {
         cleanup.remove();
       });
@@ -276,15 +334,15 @@ export function useCoHostState(liveID: string) {
   }, [handleEvent, liveID]);
 
   /**
-   * 请求连线
+   * Request host connection
    * 
-   * @param params - 请求连线参数
+   * @param params - Request host connection parameters
    * @example
    * ```tsx
    * await requestHostConnection({
    *   liveID: 'your_live_id',
-   *   onSuccess: () => console.log('请求连线成功'),
-   *   onError: (error) => console.error('请求连线失败:', error)
+   *   onSuccess: () => console.log('Request connection successfully'),
+   *   onError: (error) => console.error('Request connection failed:', error)
    * });
    * ```
    */
@@ -308,16 +366,16 @@ export function useCoHostState(liveID: string) {
   }, []);
 
   /**
-   * 取消连线请求
+   * Cancel host connection request
    * 
-   * @param params - 取消连线请求参数
+   * @param params - Cancel host connection request parameters
    * @example
    * ```tsx
    * await cancelHostConnection({
    *   liveID: 'your_live_id',
    *   toHostLiveID: 'target_live_id',
-   *   onSuccess: () => console.log('取消连线请求成功'),
-   *   onError: (error) => console.error('取消连线请求失败:', error)
+   *   onSuccess: () => console.log('Cancel connection request successfully'),
+   *   onError: (error) => console.error('Cancel connection request failed:', error)
    * });
    * ```
    */
@@ -340,21 +398,21 @@ export function useCoHostState(liveID: string) {
   }, []);
 
   /**
-   * 接受连线请求
+   * Accept host connection request
    * 
-   * @param params - 接受连线请求参数
+   * @param params - Accept host connection request parameters
    * @example
    * ```tsx
    * await acceptHostConnection({
    *   liveID: 'your_live_id',
    *   fromHostLiveID: 'from_live_id',
-   *   onSuccess: () => console.log('接受连线请求成功'),
-   *   onError: (error) => console.error('接受连线请求失败:', error)
+   *   onSuccess: () => console.log('Accept connection request successfully'),
+   *   onError: (error) => console.error('Accept connection request failed:', error)
    * });
    * ```
    */
   const acceptHostConnection = useCallback(async (params: AcceptHostConnectionOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.fromHostLiveID) {
       const error = new Error('Missing required parameter: fromHostLiveID');
       params.onError?.(error);
@@ -379,21 +437,21 @@ export function useCoHostState(liveID: string) {
   }, []);
 
   /**
-   * 拒绝连线请求
+   * Reject host connection request
    * 
-   * @param params - 拒绝连线请求参数
+   * @param params - Reject host connection request parameters
    * @example
    * ```tsx
    * await rejectHostConnection({
    *   liveID: 'your_live_id',
    *   fromHostLiveID: 'from_live_id',
-   *   onSuccess: () => console.log('拒绝连线请求成功'),
-   *   onError: (error) => console.error('拒绝连线请求失败:', error)
+   *   onSuccess: () => console.log('Reject connection request successfully'),
+   *   onError: (error) => console.error('Reject connection request failed:', error)
    * });
    * ```
    */
   const rejectHostConnection = useCallback(async (params: RejectHostConnectionOptions): Promise<void> => {
-    // 验证必填参数
+    // Validate required parameters
     if (!params.fromHostLiveID) {
       const error = new Error('Missing required parameter: fromHostLiveID');
       params.onError?.(error);
@@ -418,15 +476,15 @@ export function useCoHostState(liveID: string) {
   }, []);
 
   /**
-   * 退出连线
+   * Exit host connection
    * 
-   * @param params - 退出连线参数（可选）
+   * @param params - Exit host connection parameters (optional)
    * @example
    * ```tsx
    * await exitHostConnection({
    *   liveID: 'your_live_id',
-   *   onSuccess: () => console.log('退出连线成功'),
-   *   onError: (error) => console.error('退出连线失败:', error)
+   *   onSuccess: () => console.log('Exit connection successfully'),
+   *   onError: (error) => console.error('Exit connection failed:', error)
    * });
    * ```
    */
@@ -449,16 +507,16 @@ export function useCoHostState(liveID: string) {
   }, []);
 
   /**
-   * 添加连线主播事件监听
+   * Add co-host event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onCoHostRequestReceived'(收到连线请求)<br>'onCoHostRequestCancelled'(连线请求被取消)<br>'onCoHostRequestAccepted'(连线请求被接受)<br>'onCoHostRequestRejected'(连线请求被拒绝)<br>'onCoHostRequestTimeout'(连线请求超时)<br>'onCoHostUserJoined'(连线用户加入)<br>'onCoHostUserLeft'(连线用户离开)
-   * @param listener - 事件回调函数
-   * @param liveID - 直播间ID（可选，如果传入则使用传入的，否则使用 hook 中的 liveID）
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, options: 'onCoHostRequestReceived'(received connection request)<br>'onCoHostRequestCancelled'(connection request cancelled)<br>'onCoHostRequestAccepted'(connection request accepted)<br>'onCoHostRequestRejected'(connection request rejected)<br>'onCoHostRequestTimeout'(connection request timeout)<br>'onCoHostUserJoined'(co-host user joined)<br>'onCoHostUserLeft'(co-host user left)
+   * @param listener - Event callback function
+   * @param liveID - Live room ID (optional, uses the passed value if provided, otherwise uses the liveID from the hook)
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * addCoHostListener('onCoHostRequestReceived', (params) => {
-   *   console.log('收到连线请求:', params);
+   *   console.log('Received connection request:', params);
    * });
    * ```
    */
@@ -474,11 +532,11 @@ export function useCoHostState(liveID: string) {
   }, [liveID]);
 
   /**
-   * 移除连线主播事件监听
+   * Remove co-host event listener
    * 
-   * @param eventName - 事件名称，可选值: 'onCoHostRequestReceived'(收到连线请求)<br>'onCoHostRequestCancelled'(连线请求被取消)<br>'onCoHostRequestAccepted'(连线请求被接受)<br>'onCoHostRequestRejected'(连线请求被拒绝)<br>'onCoHostRequestTimeout'(连线请求超时)<br>'onCoHostUserJoined'(连线用户加入)<br>'onCoHostUserLeft'(连线用户离开)
-   * @param liveID - 直播间ID（可选，如果传入则使用传入的，否则使用 hook 中的 liveID）
-   * @param listenerID - 监听器ID（可选）
+   * @param eventName - Event name, options: 'onCoHostRequestReceived'(received connection request)<br>'onCoHostRequestCancelled'(connection request cancelled)<br>'onCoHostRequestAccepted'(connection request accepted)<br>'onCoHostRequestRejected'(connection request rejected)<br>'onCoHostRequestTimeout'(connection request timeout)<br>'onCoHostUserJoined'(co-host user joined)<br>'onCoHostUserLeft'(co-host user left)
+   * @param liveID - Live room ID (optional, uses the passed value if provided, otherwise uses the liveID from the hook)
+   * @param listenerID - Listener ID (optional)
    * @example
    * ```tsx
    * removeCoHostListener('onCoHostRequestReceived');
@@ -496,18 +554,18 @@ export function useCoHostState(liveID: string) {
   }, [liveID]);
 
   return {
-    coHostStatus,            // 当前连线状态
-    connected,               // 已连接的连线主播列表
-    invitees,                // 被邀请连线的主播列表
-    applicant,               // 当前申请连线的主播信息
-    candidates,              // 可邀请连线的候选主播列表
-    requestHostConnection,   // 请求连线
-    cancelHostConnection,    // 取消连线请求
-    acceptHostConnection,    // 接受连线请求
-    rejectHostConnection,    // 拒绝连线请求
-    exitHostConnection,      // 退出连线
-    addCoHostListener,       // 添加连线事件监听
-    removeCoHostListener,    // 移除连线事件监听
+    coHostStatus,            // Current co-host status
+    connected,               // List of connected co-hosts
+    invitees,                // List of invited co-hosts
+    applicant,               // Current applicant co-host info
+    candidates,              // List of candidate co-hosts available for invitation
+    requestHostConnection,   // Request host connection
+    cancelHostConnection,    // Cancel host connection request
+    acceptHostConnection,    // Accept host connection request
+    rejectHostConnection,    // Reject host connection request
+    exitHostConnection,      // Exit host connection
+    addCoHostListener,       // Add co-host event listener
+    removeCoHostListener,    // Remove co-host event listener
   };
 }
 

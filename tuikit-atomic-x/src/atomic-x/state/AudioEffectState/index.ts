@@ -1,11 +1,11 @@
 /**
  * @module AudioEffectState
  * @module_description
- * 音效设置管理模块
- * 核心功能：提供变声、混响、耳返等高级音效功能，支持多种音效效果和实时音效调节。
- * 技术特点：基于音频处理算法，支持实时音效处理、低延迟音频传输、音质优化等高级技术。
- * 业务价值：为直播平台提供差异化的音效体验，增强用户参与度和直播趣味性。
- * 应用场景：变声直播、K歌直播、音效娱乐、专业音效等需要音频处理的场景。
+ * Audio Effect Management Module
+ * Core Features: Provides advanced audio effects including voice changer, reverb, ear monitor, supporting multiple effect types and real-time audio adjustment.
+ * Technical Highlights: Based on audio processing algorithms, supports real-time effect processing, low-latency audio transmission, and audio quality optimization.
+ * Business Value: Provides differentiated audio experience for live streaming platforms, enhancing user engagement and entertainment.
+ * Application Scenarios: Voice-changing live streaming, karaoke streaming, audio entertainment, professional audio effects, and other scenarios requiring audio processing.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -23,12 +23,12 @@ import type {
 import { audioEffectStore } from './store';
 
 /**
- * 音效监听器函数类型
+ * Audio effect listener function type
  */
 type ILiveListener = (params?: unknown) => void;
 
 /**
- * 变声器类型映射表
+ * Voice changer type mapping table
  */
 const CHANGER_TYPE_MAP: Record<number, AudioChangerTypeParam> = {
     0: 'NONE',
@@ -46,7 +46,7 @@ const CHANGER_TYPE_MAP: Record<number, AudioChangerTypeParam> = {
 } as const;
 
 /**
- * 混响类型映射表
+ * Reverb type mapping table
  */
 const REVERB_TYPE_MAP: Record<number, AudioReverbTypeParam> = {
     0: 'NONE',
@@ -60,7 +60,7 @@ const REVERB_TYPE_MAP: Record<number, AudioReverbTypeParam> = {
 } as const;
 
 /**
- * 音效状态事件名称常量
+ * Audio effect state event name constants
  */
 const AUDIO_EFFECT_EVENTS = [
     'isEarMonitorOpened',
@@ -70,7 +70,7 @@ const AUDIO_EFFECT_EVENTS = [
 ];
 
 /**
- * 安全解析 JSON
+ * Safe JSON parse
  */
 function safeJsonParse<T>(json: string, defaultValue: T): T {
     try {
@@ -85,7 +85,7 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
 }
 
 /**
- * 变声类型字符串到数字的反向映射
+ * Voice changer type string to number reverse mapping
  */
 const CHANGER_TYPE_STRING_MAP: Record<string, number> = {
     'NONE': 0,
@@ -103,7 +103,7 @@ const CHANGER_TYPE_STRING_MAP: Record<string, number> = {
 };
 
 /**
- * 混响类型字符串到数字的反向映射
+ * Reverb type string to number reverse mapping
  */
 const REVERB_TYPE_STRING_MAP: Record<string, number> = {
     'NONE': 0,
@@ -117,7 +117,7 @@ const REVERB_TYPE_STRING_MAP: Record<string, number> = {
 };
 
 /**
- * 将变声类型码映射为变声类型
+ * Map voice changer type code to voice changer type
  */
 function mapChangerTypeCodeToChangerType(typeCode: number): AudioChangerTypeParam | null {
     const mappedType = CHANGER_TYPE_MAP[typeCode];
@@ -129,7 +129,7 @@ function mapChangerTypeCodeToChangerType(typeCode: number): AudioChangerTypePara
 }
 
 /**
- * 将混响类型码映射为混响类型
+ * Map reverb type code to reverb type
  */
 function mapReverbTypeCodeToReverbType(typeCode: number): AudioReverbTypeParam | null {
     const mappedType = REVERB_TYPE_MAP[typeCode];
@@ -143,7 +143,6 @@ function mapReverbTypeCodeToReverbType(typeCode: number): AudioReverbTypeParam |
 /**
  * AudioEffectState Hook
  * 
- * @param liveID - 直播间ID
  * @example
  * ```tsx
  * import { useAudioEffectState } from '@/src/atomic-x/state/AudioEffectState';
@@ -160,44 +159,64 @@ function mapReverbTypeCodeToReverbType(typeCode: number): AudioReverbTypeParam |
  *   const handleSetChangerType = async () => {
  *     await setAudioChangerType({
  *       changerType: 'MAN',
- *       onSuccess: () => console.log('设置成功'),
- *       onError: (error) => console.error('设置失败:', error)
+ *       onSuccess: () => console.log('Set successfully'),
+ *       onError: (error) => console.error('Set failed:', error)
  *     });
  *   };
  * 
  *   return (
  *     <View>
- *       <Text>当前变声类型: {audioChangerType}</Text>
- *       <Text>当前混响类型: {audioReverbType}</Text>
- *       <Button onPress={handleSetChangerType} title="设置变声" />
+ *       <Text>Current Voice Changer Type: {audioChangerType}</Text>
+ *       <Text>Current Reverb Type: {audioReverbType}</Text>
+ *       <Button onPress={handleSetChangerType} title="Set Voice Changer" />
  *     </View>
  *   );
  * }
  * ```
  */
 export function useAudioEffectState(liveID: string) {
-    // 从全局 store 获取初始状态
+    // Get initial state from global store
     const initialState = audioEffectStore.getState(liveID);
 
-    // 耳返开关状态 - 使用全局 store 的初始值
+    /**
+     * Ear monitor switch state
+     * @type {boolean}
+     * @description Controls whether to enable ear monitor function, true for enabled, false for disabled
+     * @default Get initial value from global store
+     */
     const [isEarMonitorOpened, setIsEarMonitorOpened] = useState<boolean>(initialState.isEarMonitorOpened);
 
-    // 耳返音量大小 - 使用全局 store 的初始值
+    /**
+     * Ear monitor volume level
+     * @type {number}
+     * @description Volume level of ear monitor function, used to adjust ear monitor sound level
+     * @default Get initial value from global store
+     */
     const [earMonitorVolume, setEarMonitorVolume] = useState<number>(initialState.earMonitorVolume);
 
-    // 变声状态 - 使用全局 store 的初始值
+    /**
+     * Voice changer type
+     * @type {AudioChangerTypeParam}
+     * @description Current applied voice changer effect type, supports multiple voice effects (e.g., male voice, female voice, metallic, etc.)
+     * @default Get initial value from global store
+     */
     const [audioChangerType, setAudioChangerTypeState] = useState<AudioChangerTypeParam>(initialState.audioChangerType);
 
-    // 混响状态 - 使用全局 store 的初始值
+    /**
+     * Reverb type
+     * @type {AudioReverbTypeParam}
+     * @description Current applied reverb effect type, supports multiple reverb effects (e.g., KTV, auditorium, deep, etc.)
+     * @default Get initial value from global store
+     */
     const [audioReverbType, setAudioReverbTypeState] = useState<AudioReverbTypeParam>(initialState.audioReverbType);
 
-    // 订阅全局 store 的状态变化
+    // Subscribe to global store state changes
     useEffect(() => {
         if (!liveID) {
             return;
         }
 
-        // 订阅状态变化
+        // Subscribe to state changes
         const unsubscribe = audioEffectStore.subscribe(liveID, (state) => {
             setIsEarMonitorOpened(state.isEarMonitorOpened);
             setEarMonitorVolume(state.earMonitorVolume);
@@ -205,20 +224,20 @@ export function useAudioEffectState(liveID: string) {
             setAudioReverbTypeState(state.audioReverbType);
         });
 
-        // 清理订阅
+        // Clean up subscription
         return unsubscribe;
     }, [liveID]);
 
-    // 事件监听器引用
+    // Event listener references
     type WritableMap = Record<string, unknown>;
 
     /**
-     * 处理音效状态变化事件
-     * 更新全局 store，store 会自动通知所有订阅者
+     * Handle audio effect state change events
+     * Update global store, store will automatically notify all subscribers
      */
     const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
         try {
-            // 如果 event 已经是对象，直接使用；否则尝试解析
+            // If event is already an object, use it directly; otherwise try to parse
             const data = event && typeof event === 'object' && !Array.isArray(event)
                 ? event
                 : typeof event === 'string'
@@ -227,7 +246,7 @@ export function useAudioEffectState(liveID: string) {
 
             console.log(`[AudioEffectState] ${eventName} event received:`, JSON.stringify(data));
 
-            // 检查 data 的 key 是否匹配 AUDIO_EFFECT_EVENTS 中的某个值
+            // Check if data's keys match any values in AUDIO_EFFECT_EVENTS
             if (data && typeof data === 'object' && !Array.isArray(data)) {
                 const updates: {
                     isEarMonitorOpened?: boolean;
@@ -240,26 +259,26 @@ export function useAudioEffectState(liveID: string) {
                     if (AUDIO_EFFECT_EVENTS.includes(key)) {
                         const value = data[key];
 
-                        // 根据不同的 key 更新对应的响应式数据
+                        // Update corresponding reactive data based on different keys
                         if (key === 'isEarMonitorOpened') {
                             const parsedData = typeof value === 'boolean' ? value : Boolean(value);
                             updates.isEarMonitorOpened = parsedData;
                         } else if (key === 'earMonitorVolume') {
-                            // earMonitorVolume 是数字类型
+                            // earMonitorVolume is number type
                             const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
                             updates.earMonitorVolume = parsedData;
                         } else if (key === 'audioChangerType') {
-                            // audioChangerType 需要从类型码映射
+                            // audioChangerType needs to be mapped from type code
                             let type: AudioChangerTypeParam | null = null;
                             
                             if (typeof value === 'number') {
                                 type = mapChangerTypeCodeToChangerType(value);
                             } else if (typeof value === 'string') {
-                                // 先尝试作为字符串类型直接匹配
+                                // Try to match directly as string type first
                                 if (CHANGER_TYPE_STRING_MAP[value] !== undefined) {
                                     type = value as AudioChangerTypeParam;
                                 } else {
-                                    // 尝试解析为数字
+                                    // Try to parse as number
                                     const numValue = parseInt(value, 10);
                                     if (!isNaN(numValue)) {
                                         type = mapChangerTypeCodeToChangerType(numValue);
@@ -274,17 +293,17 @@ export function useAudioEffectState(liveID: string) {
                                 console.error(`Invalid changer type received: ${value}`);
                             }
                         } else if (key === 'audioReverbType') {
-                            // audioReverbType 需要从类型码映射
+                            // audioReverbType needs to be mapped from type code
                             let type: AudioReverbTypeParam | null = null;
                             
                             if (typeof value === 'number') {
                                 type = mapReverbTypeCodeToReverbType(value);
                             } else if (typeof value === 'string') {
-                                // 先尝试作为字符串类型直接匹配
+                                // Try to match directly as string type first
                                 if (REVERB_TYPE_STRING_MAP[value] !== undefined) {
                                     type = value as AudioReverbTypeParam;
                                 } else {
-                                    // 尝试解析为数字
+                                    // Try to parse as number
                                     const numValue = parseInt(value, 10);
                                     if (!isNaN(numValue)) {
                                         type = mapReverbTypeCodeToReverbType(numValue);
@@ -302,7 +321,7 @@ export function useAudioEffectState(liveID: string) {
                     }
                 });
 
-                // 批量更新全局 store（只更新一次，避免多次通知）
+                // Batch update global store (only update once to avoid multiple notifications)
                 if (Object.keys(updates).length > 0) {
                     audioEffectStore.setState(liveID, updates);
                 }
@@ -314,7 +333,7 @@ export function useAudioEffectState(liveID: string) {
     }, [liveID]);
 
     /**
-     * 绑定事件监听
+     * Bind event listeners
      */
     useEffect(() => {
         const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
@@ -327,14 +346,14 @@ export function useAudioEffectState(liveID: string) {
             };
         };
 
-        // 保存监听器清理函数的引用
+        // Save listener cleanup function references
         const cleanupFunctions: Array<{ remove: () => void }> = [];
 
         AUDIO_EFFECT_EVENTS.forEach((eventName) => {
             const keyObject = createListenerKeyObject(eventName);
             const key = JSON.stringify(keyObject);
             console.log(key);
-            // addListener 会自动注册 Native 端和 JS 层的事件监听器
+            // addListener will automatically register Native and JS layer event listeners
             const subscription = addListener(key, handleEvent(eventName));
             if (subscription) {
                 cleanupFunctions.push(subscription);
@@ -349,7 +368,7 @@ export function useAudioEffectState(liveID: string) {
                 const key = JSON.stringify(keyObject);
                 removeListener(key);
             });
-            // 同时清理 JS 层的订阅
+            // Also clean up JS layer subscriptions
             cleanupFunctions.forEach((cleanup) => {
                 cleanup.remove();
             });
@@ -357,21 +376,21 @@ export function useAudioEffectState(liveID: string) {
     }, [handleEvent]);
 
     /**
-     * 设置变声效果
+     * Set voice changer effect
      
      * 
-     * @param params - 变声效果参数
+     * @param params - Voice changer effect parameters
      * @example
      * ```tsx
      * await setAudioChangerType({
      *   changerType: 'MAN',
-     *   onSuccess: () => console.log('设置成功'),
-     *   onError: (error) => console.error('设置失败:', error)
+     *   onSuccess: () => console.log('Set successfully'),
+     *   onError: (error) => console.error('Set failed:', error)
      * });
      * ```
      */
     const setAudioChangerType = useCallback(async (params: SetAudioChangerTypeOptions): Promise<void> => {
-        // 验证必填参数
+        // Validate required parameters
         if (!params.changerType) {
             const error = new Error('Missing required parameter: changerType');
             params.onError?.(error);
@@ -390,7 +409,7 @@ export function useAudioEffectState(liveID: string) {
             const result = await callNativeAPI<void>('setAudioChangerType', changerParams);
 
             if (result.success) {
-                // 成功时只触发回调，状态更新由事件监听器处理
+                // Only trigger callback on success, state update handled by event listener
                 onSuccess?.();
             } else {
                 const error = new Error(result.error || 'Set audio changer type failed');
@@ -403,20 +422,20 @@ export function useAudioEffectState(liveID: string) {
     }, []);
 
     /**
-     * 设置混响效果
+     * Set reverb effect
      * 
-     * @param params - 混响效果参数
+     * @param params - Reverb effect parameters
      * @example
      * ```tsx
      * await setAudioReverbType({
      *   reverbType: 'KTV',
-     *   onSuccess: () => console.log('设置成功'),
-     *   onError: (error) => console.error('设置失败:', error)
+     *   onSuccess: () => console.log('Set successfully'),
+     *   onError: (error) => console.error('Set failed:', error)
      * });
      * ```
      */
     const setAudioReverbType = useCallback(async (params: SetAudioReverbTypeOptions): Promise<void> => {
-        // 验证必填参数
+        // Validate required parameters
         if (!params.reverbType) {
             const error = new Error('Missing required parameter: reverbType');
             params.onError?.(error);
@@ -435,7 +454,7 @@ export function useAudioEffectState(liveID: string) {
             const result = await callNativeAPI<void>('setAudioReverbType', reverbParams);
 
             if (result.success) {
-                // 成功时只触发回调，状态更新由事件监听器处理
+                // Only trigger callback on success, state update handled by event listener
                 onSuccess?.();
             } else {
                 const error = new Error(result.error || 'Set audio reverb type failed');
@@ -448,20 +467,20 @@ export function useAudioEffectState(liveID: string) {
     }, []);
 
     /**
-     * 设置耳返开关状态
+     * Set ear monitor switch state
      * 
-     * @param params - 耳返开关参数
+     * @param params - Ear monitor switch parameters
      * @example
      * ```tsx
      * await setVoiceEarMonitorEnable({
      *   enable: true,
-     *   onSuccess: () => console.log('设置成功'),
-     *   onError: (error) => console.error('设置失败:', error)
+     *   onSuccess: () => console.log('Set successfully'),
+     *   onError: (error) => console.error('Set failed:', error)
      * });
      * ```
      */
     const setVoiceEarMonitorEnable = useCallback(async (params: SetVoiceEarMonitorEnableOptions): Promise<void> => {
-        // 验证必填参数
+        // Validate required parameters
         if (params.enable === undefined) {
             const error = new Error('Missing required parameter: enable');
             params.onError?.(error);
@@ -474,7 +493,7 @@ export function useAudioEffectState(liveID: string) {
             const result = await callNativeAPI<void>('setVoiceEarMonitorEnable', enableParams);
 
             if (result.success) {
-                // 成功时只触发回调，状态更新由事件监听器处理
+                // Only trigger callback on success, state update handled by event listener
                 onSuccess?.();
             } else {
                 const error = new Error(result.error || 'Set voice ear monitor enable failed');
@@ -487,20 +506,20 @@ export function useAudioEffectState(liveID: string) {
     }, []);
 
     /**
-     * 设置耳返音量大小
+     * Set ear monitor volume level
      * 
-     * @param params - 耳返音量参数
+     * @param params - Ear monitor volume parameters
      * @example
      * ```tsx
      * await setVoiceEarMonitorVolume({
      *   volume: 50,
-     *   onSuccess: () => console.log('设置成功'),
-     *   onError: (error) => console.error('设置失败:', error)
+     *   onSuccess: () => console.log('Set successfully'),
+     *   onError: (error) => console.error('Set failed:', error)
      * });
      * ```
      */
     const setVoiceEarMonitorVolume = useCallback(async (params: VolumeOptions): Promise<void> => {
-        // 验证必填参数
+        // Validate required parameters
         if (params.volume === undefined) {
             const error = new Error('Missing required parameter: volume');
             params.onError?.(error);
@@ -513,7 +532,7 @@ export function useAudioEffectState(liveID: string) {
             const result = await callNativeAPI<void>('setVoiceEarMonitorVolume', volumeParams);
 
             if (result.success) {
-                // 成功时只触发回调，状态更新由事件监听器处理
+                // Only trigger callback on success, state update handled by event listener
                 onSuccess?.();
             } else {
                 const error = new Error(result.error || 'Set voice ear monitor volume failed');
@@ -526,15 +545,15 @@ export function useAudioEffectState(liveID: string) {
     }, []);
 
     /**
-     * 添加音效事件监听
+     * Add audio effect event listener
      *
-     * @param eventName - 事件名称
-     * @param listener - 事件回调函数
-     * @param listenerID - 监听器ID（可选）
+     * @param eventName - Event name
+     * @param listener - Event callback function
+     * @param listenerID - Listener ID (optional)
      * @example
      * ```tsx
      * addAudioEffectListener('onAudioEffectChanged', (params) => {
-     *   console.log('音效变化:', params);
+     *   console.log('Audio effect changed:', params);
      * });
      * ```
      */
@@ -550,10 +569,10 @@ export function useAudioEffectState(liveID: string) {
     }, []);
 
     /**
-     * 移除音效事件监听
+     * Remove audio effect event listener
      *
-     * @param eventName - 事件名称
-     * @param listenerID - 监听器ID（可选）
+     * @param eventName - Event name
+     * @param listenerID - Listener ID (optional)
      * @example
      * ```tsx
      * removeAudioEffectListener('onAudioEffectChanged');
@@ -571,16 +590,16 @@ export function useAudioEffectState(liveID: string) {
     }, []);
 
     return {
-        audioChangerType,          // 变声状态
-        audioReverbType,           // 混响状态
-        isEarMonitorOpened,        // 耳返开关状态
-        earMonitorVolume,          // 耳返音量大小
-        setAudioChangerType,       // 设置变声效果
-        setAudioReverbType,        // 设置混响效果
-        setVoiceEarMonitorEnable,  // 设置耳返开关
-        setVoiceEarMonitorVolume,  // 设置耳返音量
-        addAudioEffectListener,    // 添加音效事件监听
-        removeAudioEffectListener, // 移除音效事件监听
+        audioChangerType,          // Voice changer state
+        audioReverbType,           // Reverb state
+        isEarMonitorOpened,        // Ear monitor switch state
+        earMonitorVolume,          // Ear monitor volume level
+        setAudioChangerType,       // Set voice changer effect
+        setAudioReverbType,        // Set reverb effect
+        setVoiceEarMonitorEnable,  // Set ear monitor switch
+        setVoiceEarMonitorVolume,  // Set ear monitor volume
+        addAudioEffectListener,    // Add audio effect event listener
+        removeAudioEffectListener, // Remove audio effect event listener
     };
 }
 
