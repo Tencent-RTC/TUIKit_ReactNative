@@ -23,6 +23,7 @@ export type LiveUserInfoParam = {
   userID?: string;
   userName?: string;
   avatarURL?: string;
+  level?: number;
 };
 
 /**
@@ -95,12 +96,39 @@ export interface EndLiveOptions extends Record<string, unknown> {
 }
 
 /**
+ * 直播信息修改标记
+ */
+export const LiveInfoModifyFlag = {
+  NONE: 0,
+  LIVE_NAME: 1,
+  NOTICE: 2,
+  IS_MESSAGE_DISABLE: 3,
+  IS_PUBLIC_VISIBLE: 4,
+  SEAT_MODE: 5,
+  COVER_URL: 6,
+  BACKGROUND_URL: 7,
+  CATEGORY_LIST: 8,
+  ACTIVITY_STATUS: 9,
+  SEAT_LAYOUT_TEMPLATE_ID: 10,
+} as const;
+
+export type LiveInfoModifyFlagType = (typeof LiveInfoModifyFlag)[keyof typeof LiveInfoModifyFlag];
+
+/**
  * 更新直播信息选项
  */
 export interface UpdateLiveInfoOptions extends Record<string, unknown> {
-  liveID: string;
-  title?: string;
-  coverUrl?: string;
+  liveInfo: Pick<LiveInfoParam, 'liveID'> & Partial<LiveInfoParam>;
+  modifyFlagList: LiveInfoModifyFlagType[];
+  onSuccess?: () => void;
+  onError?: (error: Error | string) => void;
+}
+
+/**
+ * 更新直播元数据选项
+ */
+export interface UpdateLiveMetaDataOptions extends Record<string, unknown> {
+  metaData: Record<string, string>;
   onSuccess?: () => void;
   onError?: (error: Error | string) => void;
 }

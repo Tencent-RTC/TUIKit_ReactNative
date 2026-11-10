@@ -14,6 +14,7 @@ export interface UserProfileParam {
     userID: string;
     nickname?: string;
     avatarURL?: string;
+    level?: number;
     [key: string]: unknown;
 }
 

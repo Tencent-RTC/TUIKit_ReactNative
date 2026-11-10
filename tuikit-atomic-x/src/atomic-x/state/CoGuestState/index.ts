@@ -8,8 +8,8 @@
  * Application Scenarios: Audience co-guest, interactive Q&A, online karaoke, game streaming, and other scenarios requiring audience participation.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { callNativeAPI } from '../../utils';
+import { useState, useEffect, useCallback } from 'react';
+import { callNativeAPI, createStateError } from '../../utils';
 import { addListener, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
@@ -26,6 +26,7 @@ import type {
   DisconnectOptions,
 } from './types';
 import { coGuestStore } from './store';
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 
 /**
  * Co-guest listener function type
@@ -56,6 +57,90 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
     return defaultValue;
   }
 }
+
+type WritableMap = Record<string, unknown>;
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+  return (event: WritableMap) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          connected?: SeatUserInfoParam[];
+          invitees?: LiveUserInfoParam[];
+          applicants?: LiveUserInfoParam[];
+          candidates?: LiveUserInfoParam[];
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (CO_GUEST_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'connected') {
+              let parsedData: SeatUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as SeatUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<SeatUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<SeatUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.connected = parsedData;
+            } else if (key === 'invitees') {
+              let parsedData: LiveUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as LiveUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.invitees = parsedData;
+            } else if (key === 'applicants') {
+              let parsedData: LiveUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as LiveUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.applicants = parsedData;
+            } else if (key === 'candidates') {
+              let parsedData: LiveUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as LiveUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.candidates = parsedData;
+            }
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          coGuestStore.setState(liveID, updates);
+        }
+      }
+    } catch (error) {
+      console.error(`[CoGuestState] ${eventName} event parse error:`, error, event);
+    }
+  };
+}
+
+const currentLiveBinding = createCurrentLiveBinding({
+  store: 'CoGuestStore',
+  events: CO_GUEST_EVENTS,
+  createHandler: createNativeEventHandler,
+  reset: (liveID) => coGuestStore.resetState(liveID),
+});
 
 /**
  * CoGuestState Hook
@@ -174,143 +259,10 @@ export function useCoGuestState(liveID: string) {
     return unsubscribe;
   }, [liveID]);
 
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle co-guest state change events
-   * Update global store, store will automatically notify all subscribers
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // 如果 event 已经是对象，直接使用；否则尝试解析
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[CoGuestState] ${eventName} event received:`, JSON.stringify(data));
-
-      // 检查 data 的 key 是否匹配 CO_GUEST_EVENTS 中的某个值
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const updates: {
-          connected?: SeatUserInfoParam[];
-          invitees?: LiveUserInfoParam[];
-          applicants?: LiveUserInfoParam[];
-          candidates?: LiveUserInfoParam[];
-        } = {};
-
-        Object.keys(data).forEach((key) => {
-          if (CO_GUEST_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // 根据不同的 key 更新对应的响应式数据
-            if (key === 'connected') {
-              // connected 是数组类型
-              let parsedData: SeatUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as SeatUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<SeatUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<SeatUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.connected = parsedData;
-            } else if (key === 'invitees') {
-              // invitees 是数组类型
-              let parsedData: LiveUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as LiveUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.invitees = parsedData;
-            } else if (key === 'applicants') {
-              // applicants 是数组类型
-              let parsedData: LiveUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as LiveUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.applicants = parsedData;
-            } else if (key === 'candidates') {
-              // candidates 是数组类型
-              let parsedData: LiveUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as LiveUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.candidates = parsedData;
-            }
-          }
-        });
-
-        // 批量更新全局 store（只更新一次，避免多次通知）
-        if (Object.keys(updates).length > 0) {
-          coGuestStore.setState(liveID, updates);
-        }
-      }
-    } catch (error) {
-      console.error(`[CoGuestState] ${eventName} event parse error:`, error);
-      console.log(`[CoGuestState] ${eventName} event received (raw):`, event);
-    }
-  }, [liveID]);
-
-  /**
-   * 绑定事件监听
-   */
   useEffect(() => {
-    if (!liveID) {
-      return;
-    }
-
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'CoGuestStore',
-        name: eventName,
-        roomID: liveID ?? null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // 保存监听器清理函数的引用
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    CO_GUEST_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener 会自动注册 Native 端和 JS 层的事件监听器
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[CoGuestState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      CO_GUEST_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // 同时清理 JS 层的订阅
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent, liveID]);
+    currentLiveBinding.ensureWatchCurrentLive();
+    currentLiveBinding.bindEvent(liveID);
+  }, [liveID]);
 
   /**
    * 申请连麦座位
@@ -322,7 +274,7 @@ export function useCoGuestState(liveID: string) {
    *   liveID: 'your_live_id',
    *   seatIndex: 2,
    *   timeout: 10,
-   *   extension: 'extra info',
+   *   extraInfo: 'extra info',
    *   onSuccess: () => console.log('申请成功'),
    *   onError: (error) => console.error('申请失败:', error)
    * });
@@ -337,7 +289,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Apply for seat failed');
+        const error = createStateError(result, 'Apply for seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -368,7 +320,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Cancel application failed');
+        const error = createStateError(result, 'Cancel application failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -408,7 +360,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Accept application failed');
+        const error = createStateError(result, 'Accept application failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -447,7 +399,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Reject application failed');
+        const error = createStateError(result, 'Reject application failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -464,10 +416,10 @@ export function useCoGuestState(liveID: string) {
    * ```tsx
    * await inviteToSeat({
    *   liveID: 'your_live_id',
-   *   userID: 'user123',
+   *   inviteeID: 'user123',
    *   seatIndex: 2,
    *   timeout: 10,
-   *   extension: 'extra info',
+   *   extraInfo: 'extra info',
    *   onSuccess: () => console.log('邀请成功'),
    *   onError: (error) => console.error('邀请失败:', error)
    * });
@@ -475,8 +427,8 @@ export function useCoGuestState(liveID: string) {
    */
   const inviteToSeat = useCallback(async (params: InviteToSeatOptions): Promise<void> => {
     // 验证必填参数
-    if (!params.userID) {
-      const error = new Error('Missing required parameter: userID');
+    if (!params.inviteeID) {
+      const error = new Error('Missing required parameter: inviteeID');
       params.onError?.(error);
       return;
     }
@@ -489,7 +441,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Invite to seat failed');
+        const error = createStateError(result, 'Invite to seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -528,7 +480,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Cancel invitation failed');
+        const error = createStateError(result, 'Cancel invitation failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -567,7 +519,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Accept invitation failed');
+        const error = createStateError(result, 'Accept invitation failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -606,7 +558,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Reject invitation failed');
+        const error = createStateError(result, 'Reject invitation failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -637,7 +589,7 @@ export function useCoGuestState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Disconnect failed');
+        const error = createStateError(result, 'Disconnect failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -760,5 +712,4 @@ export function useCoGuestState(liveID: string) {
 }
 
 export default useCoGuestState;
-
 

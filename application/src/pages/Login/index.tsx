@@ -2,7 +2,7 @@
  * Login Page
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   TextInput,
@@ -13,7 +13,7 @@ import {
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { showToast, useLoginState, useTranslation } from 'react-native-tuikit-atomic-x';
+import { Toast, useLoginState, useTranslation } from '@tencentcloud/react-native-tuikit-atomic-x';
 import { genTestUserSig, sdkAppID } from '../../debug/UserSigGenerator';
 
 interface LoginPageProps {
@@ -32,6 +32,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [userID, setUserID] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, loginUserInfo, setSelfInfo } = useLoginState();
+  const [toast, setToast] = useState<{ title: string; duration: number; seq: number } | null>(null);
+
+  const showToast = useCallback((title: string, duration: number) => {
+    setToast((prev) => ({ title, duration, seq: (prev?.seq ?? 0) + 1 }));
+  }, []);
 
   const handleInput = (text: string) => {
     const value = text.replace(/[^a-zA-Z0-9_]/g, '');
@@ -100,7 +105,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       ]}>
       <View style={styles.logoContainer}>
         <Image
-          source={require('react-native-tuikit-atomic-x/src/static/images/rtc-logo.png')}
+          source={require('../../assets/rtc-logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -133,6 +138,15 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           )}
         </TouchableOpacity>
       </View>
+      {toast && (
+        <Toast
+          key={toast.seq}
+          visible
+          title={toast.title}
+          duration={toast.duration}
+          onClose={() => setToast(null)}
+        />
+      )}
     </View>
   );
 }

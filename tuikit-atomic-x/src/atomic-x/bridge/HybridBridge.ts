@@ -51,6 +51,15 @@ export function callAPI(request: HybridRequest): Promise<HybridResponse> {
         });
 }
 
+export function callExperimentalAPI(json: string): Promise<string> {
+    if (!HybridBridgeProxy) {
+        return Promise.reject(new Error('HybridBridgeProxy is not available'));
+    }
+    return HybridBridgeProxy.callExperimentalAPI(json).then((result: unknown) =>
+        typeof result === 'string' ? result : ''
+    );
+}
+
 export function addListener(key: string, listener?: (event: any) => void): { remove: () => void } | void {
     if (!HybridBridgeProxy) {
         return;

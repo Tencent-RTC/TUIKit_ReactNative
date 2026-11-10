@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { callNativeAPI } from '../../utils';
+import { callNativeAPI, createStateError } from '../../utils';
 import { addListener, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
@@ -21,11 +21,87 @@ import type {
   DisableSendMessageOptions,
 } from './types';
 import { liveAudienceStore } from './store';
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 
 /**
  * Audience listener function type
  */
 type ILiveListener = (params?: unknown) => void;
+
+const LIVE_AUDIENCE_EVENTS = [
+  'audienceList',
+  'audienceCount',
+  'messageBannedUserList',
+];
+
+function safeJsonParse<T>(json: string, defaultValue: T): T {
+  try {
+    if (!json || typeof json !== 'string') {
+      return defaultValue;
+    }
+    return JSON.parse(json) as T;
+  } catch (error) {
+    console.error('safeJsonParse error:', error);
+    return defaultValue;
+  }
+}
+
+function parseUserList(value: unknown): LiveUserInfoParam[] {
+  if (Array.isArray(value)) {
+    return value as LiveUserInfoParam[];
+  }
+  if (typeof value === 'string') {
+    return safeJsonParse<LiveUserInfoParam[]>(value, []);
+  }
+  return safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
+}
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+  return (event: Record<string, unknown>) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          audienceList?: LiveUserInfoParam[];
+          audienceCount?: number;
+          messageBannedUserList?: LiveUserInfoParam[];
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (!LIVE_AUDIENCE_EVENTS.includes(key)) {
+            return;
+          }
+          const value = data[key];
+          if (key === 'audienceList') {
+            updates.audienceList = parseUserList(value);
+          } else if (key === 'audienceCount') {
+            updates.audienceCount = typeof value === 'number' ? value : (Number(value) || 0);
+          } else if (key === 'messageBannedUserList') {
+            updates.messageBannedUserList = parseUserList(value);
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          liveAudienceStore.setState(liveID, updates);
+        }
+      }
+    } catch (error) {
+      console.error(`[LiveAudienceState] ${eventName} event parse error:`, error);
+    }
+  };
+}
+
+const currentLiveBinding = createCurrentLiveBinding({
+  store: 'LiveAudienceStore',
+  events: LIVE_AUDIENCE_EVENTS,
+  createHandler: createNativeEventHandler,
+  reset: (liveID) => liveAudienceStore.resetState(liveID),
+});
 
 /**
  * LiveAudienceState Hook
@@ -91,6 +167,8 @@ export function useLiveAudienceState(liveID: string) {
    */
   const [audienceCount, setAudienceCount] = useState<number>(0);
 
+  const [messageBannedUserList, setMessageBannedUserList] = useState<LiveUserInfoParam[]>(initialState.messageBannedUserList);
+
   // Subscribe to global store state changes
   useEffect(() => {
     if (!liveID) {
@@ -100,14 +178,19 @@ export function useLiveAudienceState(liveID: string) {
     // Subscribe to state changes
     const unsubscribe = liveAudienceStore.subscribe(liveID, (state) => {
       setAudienceList(state.audienceList);
-      const displayCount = state.audienceCount >= 100 
-        ? state.audienceCount 
-        : state.audienceList.length;
-      setAudienceCount(displayCount);
+      // SDK audienceCount is driven only by onRoomUserCountChanged, which some Android hosts deliver late or not at all;
+      // the list follows enter/leave in real time, while a paged list of a large room is shorter than the SDK count.
+      setAudienceCount(Math.max(Number(state.audienceCount) || 0, state.audienceList.length));
+      setMessageBannedUserList(state.messageBannedUserList);
     });
 
     // Clean up subscription
     return unsubscribe;
+  }, [liveID]);
+
+  useEffect(() => {
+    currentLiveBinding.ensureWatchCurrentLive();
+    currentLiveBinding.bindEvent(liveID);
   }, [liveID]);
 
   /**
@@ -132,7 +215,7 @@ export function useLiveAudienceState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Fetch audience list failed');
+        const error = createStateError(result, 'Fetch audience list failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -171,7 +254,7 @@ export function useLiveAudienceState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Set administrator failed');
+        const error = createStateError(result, 'Set administrator failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -210,7 +293,7 @@ export function useLiveAudienceState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Revoke administrator failed');
+        const error = createStateError(result, 'Revoke administrator failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -249,7 +332,7 @@ export function useLiveAudienceState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Kick user out of room failed');
+        const error = createStateError(result, 'Kick user out of room failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -289,7 +372,7 @@ export function useLiveAudienceState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Disable send message failed');
+        const error = createStateError(result, 'Disable send message failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -346,6 +429,7 @@ export function useLiveAudienceState(liveID: string) {
   return {
     audienceList,              // Live room audience list
     audienceCount,             // Live room audience count
+    messageBannedUserList,
     fetchAudienceList,          // Fetch audience list
     setAdministrator,          // Set administrator
     revokeAdministrator,       // Revoke administrator permission
@@ -357,5 +441,4 @@ export function useLiveAudienceState(liveID: string) {
 }
 
 export default useLiveAudienceState;
-
 

@@ -1,0 +1,255 @@
+{
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "complete": "Done",
+    "unknown": "Unknown",
+    "me": "Me",
+    "anchor": "Anchor",
+    "SearchCompleted": "Search Completed"
+  },
+  "keepAlive": {
+    "title": "Audio Service",
+    "description": "Running"
+  },
+  "toast": {
+    "micDisabledByAnchor": "Microphone disabled by anchor",
+    "cameraDisabledByAnchor": "Camera disabled by anchor",
+    "refreshSuccess": "Refresh successful",
+    "refreshFailed": "Refresh failed, please try again",
+    "noMore": "No more content",
+    "operationFailed": "Operation failed",
+    "userMuted": "Muted {{name}}",
+    "userUnmuted": "Unmuted {{name}}",
+    "userCameraClosed": "Disabled {{name}}'s camera",
+    "userCameraOpened": "Enabled {{name}}'s camera",
+    "joinRoomFailed": "Failed to join room"
+  },
+  "liveList": {
+    "title": "Live",
+    "loading": "Loading...",
+    "noLiveRooms": "No live rooms",
+    "enterLiveId": "Please enter liveID",
+    "searchPlaceholder": "Enter room name, anchor name or room ID"
+  },
+  "beforeLive": {
+    "public": "Public",
+    "private": "Private",
+    "cover": "Cover",
+    "category": "Category",
+    "roomNamePlaceholder": "Enter room name",
+    "startLive": "Start Live"
+  },
+  "liveRoom": {
+    "mute": "Mute",
+    "unmute": "Unmute"
+  },
+  "coGuest": {
+    "requestList": "Requests",
+    "accept": "Accept",
+    "reject": "Reject",
+    "noRequests": "No requests",
+    "title": "Select Connection Type",
+    "waitingForAnchor": "Select connection type, will connect after anchor approves",
+    "applyVideo": "Apply for Video",
+    "applyAudio": "Apply for Audio",
+    "disconnectCoGuest": "Disconnect",
+    "disconnect": "Disconnect",
+    "disconnectConfirm": "Are you sure to disconnect?",
+    "notSupportCoGuest": "You are currently unable to perform this action (possibly due to lack of permissions or scenario restrictions)."
+  },
+  "coHost": {
+    "hostBusy": "Host is busy, try later",
+    "inviting": "Inviting...",
+    "inviteHost": "Invite",
+    "invite": "Invite",
+    "disconnect": "Disconnect",
+    "connected": "Connected",
+    "onlineAnchors": "Online Anchors",
+    "disconnectConfirm": "Are you sure to disconnect?"
+  },
+  "barrage": {
+    "placeholder": "Join Chat!",
+    "gift": "{{name}} sent {{gift}}",
+    "tooLong": "Content too long",
+    "send": "Send"
+  },
+  "gift": {
+    "title": "Gifts",
+    "send": "Send",
+    "noGifts": "No gifts"
+  },
+  "audioEffect": {
+    "title": "Audio Effects",
+    "earReturn": "In-ear Monitor",
+    "earReturnVolume": "Monitor Volume",
+    "voiceChange": "Voice Changer",
+    "voiceOriginal": "Original",
+    "voiceChild": "Child",
+    "voiceLoli": "Loli",
+    "voiceUncle": "Uncle",
+    "voiceMetal": "Metal",
+    "voiceHeavyMetal": "Heavy Metal",
+    "voiceEthereal": "Ethereal",
+    "reverb": "Reverb",
+    "reverbNone": "None",
+    "reverbKTV": "KTV",
+    "reverbRoom": "Small Room",
+    "reverbHall": "Hall",
+    "reverbLowDeep": "Deep",
+    "reverbLoud": "Loud",
+    "reverbMetal": "Metallic",
+    "reverbMagnetic": "Magnetic",
+    "bgMusic": "Background Music",
+    "bgMusicVolume": "Music Volume",
+    "voiceVolume": "Voice Volume",
+    "musicList": "Music List",
+    "noMusic": "No music",
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop"
+  },
+  "settings": {
+    "audio": "Audio Settings",
+    "muteVideo": "Stop Video",
+    "openCamera": "Start Video",
+    "disableVideo": "Disable Video",
+    "muteAudio": "Mute Audio",
+    "openAudio": "Open Audio"
+  },
+  "audienceList": {
+    "confirmKickOut": "Confirm to kick out {{name}}?",
+    "RemoveOut": "Remove Out"
+  },
+  "liveStreamAction": {
+    "beauty": "Beauty",
+    "audioEffect": "Audio",
+    "flipCamera": "Flip"
+  },
+  "LiveListPage": {
+    "title": "Live List",
+    "create": "Start Live"
+  },
+  "anchor": {
+    "coHostAccepted": "Connection accepted",
+    "coHostRejected": "Connection rejected",
+    "coHostTimeout": "Connection request timeout",
+    "giftToMe": "Me",
+    "giftTo": "Sent {{gift}} x{{count}} to {{receiver}}",
+    "defaultName": "Anchor",
+    "myLive": "My Live",
+    "createLiveFailed": "Failed to create live: {{error}}",
+    "createLiveFailedUnknown": "Failed to create live: Unknown error",
+    "coGuestInProgress": "Co-guest in progress, cannot use co-host feature",
+    "endLiveFailed": "Failed to end live: {{error}}",
+    "frontCameraOnly": "Only front camera supports this setting",
+    "linkHost": "Host",
+    "linkGuest": "Co-guest",
+    "more": "More",
+    "coHostInvite": "{{name}} sent you a connection invite",
+    "accept": "Accept",
+    "reject": "Reject",
+    "disconnectCoHost": "Disconnect",
+    "closeLiveRoom": "Close Live",
+    "moreFeatures": "More Features",
+    "beauty": "Beauty",
+    "audioEffect": "Audio",
+    "flip": "Flip",
+    "mirror": "Mirror",
+    "dashboard": "Dashboard",
+    "applyCoGuest": "Apply ({{count}})"
+  },
+  "audience": {
+    "defaultName": "Anchor",
+    "liveEnded": "Live has ended",
+    "kickedOut": "You have been kicked out",
+    "applicationRejected": "Co-guest application rejected",
+    "applicationTimeout": "Co-guest application timeout",
+    "kickedOffSeat": "You have been removed from the seat",
+    "cameraUnmuted": "Your camera has been unmuted",
+    "cameraMuted": "Your camera has been muted",
+    "micUnmuted": "Your microphone has been unmuted",
+    "micMuted": "Your microphone has been muted",
+    "exitLiveRoom": "Exit live room",
+    "cancelCoGuestApply": "Cancel co-guest application",
+    "disconnectCoGuest": "Disconnect co-guest",
+    "sendGiftFailed": "Failed to send gift: {{error}}",
+    "rechargeDeveloping": "Recharge: Feature in development",
+    "giftTo": "Sent {{gift}} x{{count}} to {{receiver}}",
+    "giftToMe": "Me"
+  },
+  "liveEnd": {
+    "title": "Live Ended",
+    "duration": "Duration",
+    "totalViewers": "Total Viewers",
+    "messageCount": "Messages",
+    "giftIncome": "Gift Income",
+    "giftSenders": "Gift Senders",
+    "likeCount": "Likes"
+  },
+  "networkQualityPanel": {
+    "title": "Dashboard",
+    "delay": "Round Trip Delay",
+    "downLoss": "Downstream Loss",
+    "upLoss": "Upstream Loss"
+  },
+  "userInfoPanel": {
+    "liveRoomId": "Live Room ID",
+    "userId": "UserId"
+  },
+  "audienceListPanel": {
+    "title": "Online Viewers",
+    "noAudience": "No viewers"
+  },
+  "liveCard": {
+    "joining": "Joining...",
+    "viewerCount": "{{viewerCount}} viewers",
+    "unknownUser": "Unknown user",
+    "unknownRoom": "Unnamed room"
+  },
+  "beauty": {
+    "smooth": "Smooth",
+    "whitening": "Whitening",
+    "ruddy": "Ruddy",
+    "close": "Close"
+  },
+  "livePage": {
+    "description1": "Build interactive video live streaming with Live API,",
+    "description2": "bringing you a clear and smooth live experience."
+  },
+  "app": {
+    "brandName": "Tencent RTC",
+    "live": "Live",
+    "liveDesc": "Preview·Beauty·Co-host PK"
+  },
+  "login": {
+    "userId": "User ID",
+    "userIdPlaceholder": "Enter user ID",
+    "login": "Login",
+    "enterUserId": "Please enter UserID",
+    "userSigError": "Error: UserSig generation failed, please configure UserSig service",
+    "loginFailed": "Login failed: {{error}}",
+    "loginException": "Login exception: {{error}}"
+  },
+  "profile": {
+    "notSet": "Not set",
+    "fullNickname": "Full Nickname",
+    "nicknameEmpty": "Nickname cannot be empty",
+    "nicknameSuccess": "Nickname updated",
+    "nicknameFailed": "Update failed, please retry",
+    "avatarSuccess": "Avatar updated",
+    "avatarFailed": "Update failed, please retry",
+    "tip": "Notice",
+    "logoutConfirm": "Are you sure to logout?",
+    "logoutFailed": "Logout failed, please retry",
+    "title": "Profile",
+    "nickname": "Nickname",
+    "nicknameLabel": "Nickname:",
+    "userIdLabel": "User ID:",
+    "editNickname": "Edit Nickname",
+    "nicknamePlaceholder": "Enter nickname",
+    "setAsAvatar": "Set as Avatar",
+    "systemGallery": "System Gallery",
+    "logout": "Logout"
+  }
+}

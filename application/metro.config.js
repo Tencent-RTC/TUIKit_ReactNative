@@ -19,8 +19,8 @@ module.exports = withMetroConfig(
   {
     resolver: {
       extraNodeModules: {
-        'react-native-tuikit-atomic-x': path.resolve(__dirname, '../tuikit-atomic-x'),
-        'react-native-tuikit-live': path.resolve(__dirname, '../live'),
+        '@tencentcloud/react-native-tuikit-atomic-x': path.resolve(__dirname, '../tuikit-atomic-x'),
+        '@tencentcloud/react-native-tuikit-live': path.resolve(__dirname, '../live'),
       },
     },
     watchFolders: [

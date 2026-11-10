@@ -10,18 +10,18 @@
 // 导出 State 模块
 export * from './atomic-x';
 
-import './locales/index'; // Import i18n config side-effect
-export { default as i18n } from './locales/index'; // Export i18n instance
+import './components/locales/index';
+export { default as i18n } from './components/locales/index';
 export { useTranslation, I18nextProvider } from 'react-i18next'; // Re-export for consumers
 
 // 导出组件
 export * from './components';
 
-// 导出常量
-export * from './components/constants';
+export * from './native';
 
-// 导出静态资源映射
-export { StaticImages } from './static';
+export * from './utils';
+
+export * from './constants';
 
 // 版本信息
 export const VERSION = '1.0.0';

@@ -1,5 +1,4 @@
 import UIKit
-import SVGAPlayer
 import React
 
 @objc(SVGAAnimationView)

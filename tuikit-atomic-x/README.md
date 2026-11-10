@@ -1,4 +1,4 @@
-# react-native-tuikit-atomic-x
+# @tencentcloud/react-native-tuikit-atomic-x
 
 Tuikit-Atomic-X SDK is a reactive API SDK launched by Tencent Cloud for scenarios such as instant messaging, audio/video calls, live video streaming, and voice chat rooms. It supports features including room management, broadcaster go-live, viewer watching, member management, microphone position control, and basic beautification.broadcaster go-live, viewer watching, member management, microphone position control, and basic beautification.
 
@@ -6,7 +6,7 @@ Tuikit-Atomic-X SDK is a reactive API SDK launched by Tencent Cloud for scenario
 
 
 ```sh
-npm install react-native-tuikit-atomic-x
+npm install @tencentcloud/react-native-tuikit-atomic-x
 ```
 
 
@@ -14,7 +14,7 @@ npm install react-native-tuikit-atomic-x
 
 
 ```js
-import { multiply } from 'react-native-tuikit-atomic-x';
+import { multiply } from '@tencentcloud/react-native-tuikit-atomic-x';
 
 // ...
 

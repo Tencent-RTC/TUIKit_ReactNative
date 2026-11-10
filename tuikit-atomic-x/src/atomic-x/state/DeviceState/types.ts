@@ -87,7 +87,7 @@ export interface OpenLocalMicrophoneOptions extends Record<string, unknown> {
  * 设置音频路由选项
  */
 export interface SetAudioRouteOptions extends Record<string, unknown> {
-  route: AudioOutputType;
+  audioRoute: AudioOutputType;
   onSuccess?: () => void;
   onError?: (error: Error | string) => void;
   [key: string]: unknown;
@@ -98,6 +98,13 @@ export interface SetAudioRouteOptions extends Record<string, unknown> {
  */
 export interface OpenLocalCameraOptions extends Record<string, unknown> {
   isFront?: boolean;
+  onSuccess?: () => void;
+  onError?: (error: Error | string) => void;
+  [key: string]: unknown;
+}
+
+export interface StartCameraTestOptions extends Record<string, unknown> {
+  cameraView: string;
   onSuccess?: () => void;
   onError?: (error: Error | string) => void;
   [key: string]: unknown;

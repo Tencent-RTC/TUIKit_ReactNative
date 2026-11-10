@@ -8,8 +8,8 @@
  * Use Cases: Multi-person co-hosting, anchor PK, interactive games, online education, conference live streaming, and other scenarios requiring multi-person audio/video interaction.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { callNativeAPI } from '../../utils';
+import { useState, useEffect, useCallback } from 'react';
+import { callNativeAPI, createStateError } from '../../utils';
 import { addListener, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
@@ -29,6 +29,8 @@ import type {
   CloseRemoteMicrophoneOptions,
 } from './types';
 import { liveSeatStore } from './store';
+import { mapEqual } from '../internal/equality';
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 
 /**
  * Seat listener function type
@@ -98,6 +100,258 @@ function parseMapFromJson(json: string): Map<string, number> | null {
     return null;
   }
 }
+
+type WritableMap = Record<string, unknown>;
+
+// The SDK pushes intermediate seatLists while a member joins (host cameraStatus briefly 0,
+// userSuspendStatus briefly 1), so commits are held until two consecutive pushes agree.
+const SWITCH_COMMIT_FALLBACK_MS = 500;
+
+interface SeatCommitState {
+  committedSeatList: SeatInfo[];
+  switching: boolean;
+  pendingSeatList: SeatInfo[] | null;
+  pendingStateSig: string;
+  switchFallbackTimer: ReturnType<typeof setTimeout> | null;
+  pendingCanvas: LiveCanvasParams | null | undefined;
+  pendingSeatCommit: SeatInfo[] | null;
+  seatBatchScheduled: boolean;
+}
+
+const seatCommitStates = new Map<string, SeatCommitState>();
+
+function getSeatCommitState(liveID: string): SeatCommitState {
+  let state = seatCommitStates.get(liveID);
+  if (!state) {
+    state = {
+      committedSeatList: [],
+      switching: false,
+      pendingSeatList: null,
+      pendingStateSig: '',
+      switchFallbackTimer: null,
+      pendingCanvas: undefined,
+      pendingSeatCommit: null,
+      seatBatchScheduled: false,
+    };
+    seatCommitStates.set(liveID, state);
+  }
+  return state;
+}
+
+function resetSeatCommitState(liveID: string): void {
+  const state = seatCommitStates.get(liveID);
+  if (state?.switchFallbackTimer) {
+    clearTimeout(state.switchFallbackTimer);
+  }
+  seatCommitStates.delete(liveID);
+}
+
+const occupiedSeatPairs = (list: SeatInfo[]) =>
+  (list || [])
+    .map((s) => `${s?.index ?? '-'}:${String(s?.userInfo?.userID || '-')}`)
+    .filter((pair) => !pair.endsWith(':-'));
+
+const hasNewMember = (incoming: SeatInfo[], committed: SeatInfo[]) => {
+  const committedPairs = occupiedSeatPairs(committed);
+  const incomingPairs = occupiedSeatPairs(incoming);
+  if (committedPairs.length === 0 && incomingPairs.length === 0) return false;
+  return incomingPairs.some((pair) => committedPairs.indexOf(pair) === -1);
+};
+
+const stateSignature = (list: SeatInfo[]) =>
+  (list || [])
+    .map((s) => {
+      const u = (s?.userInfo || {}) as unknown as Record<string, unknown>;
+      const cam = u.cameraStatus === undefined ? 'x' : String(u.cameraStatus);
+      const sus =
+        u.userSuspendStatus === undefined ? 'x' : String(u.userSuspendStatus);
+      return `${s?.index ?? '-'}:${String(u.userID || '-')}:${cam}:${sus}`;
+    })
+    .join('|');
+
+// canvas and seatList arrive as separate pushes; committing them in one microtask keeps the
+// overlays from being positioned with one layout's regions and the other layout's scale.
+function flushSeatBatch(liveID: string): void {
+  const state = getSeatCommitState(liveID);
+  state.seatBatchScheduled = false;
+  const updates: {
+    seatList?: SeatInfo[];
+    canvas?: LiveCanvasParams | null;
+  } = {};
+  if (state.pendingCanvas !== undefined) {
+    updates.canvas = state.pendingCanvas;
+    state.pendingCanvas = undefined;
+  }
+  if (state.pendingSeatCommit !== null) {
+    state.committedSeatList = state.pendingSeatCommit;
+    updates.seatList = state.pendingSeatCommit;
+    state.pendingSeatCommit = null;
+  }
+  if (Object.keys(updates).length > 0) {
+    liveSeatStore.setState(liveID, updates);
+  }
+}
+
+function scheduleSeatBatch(liveID: string): void {
+  const state = getSeatCommitState(liveID);
+  if (state.seatBatchScheduled) return;
+  state.seatBatchScheduled = true;
+  Promise.resolve().then(() => flushSeatBatch(liveID));
+}
+
+function endSwitching(state: SeatCommitState): void {
+  state.switching = false;
+  state.pendingSeatList = null;
+  state.pendingStateSig = '';
+  if (state.switchFallbackTimer != null) {
+    clearTimeout(state.switchFallbackTimer);
+    state.switchFallbackTimer = null;
+  }
+}
+
+function queueSeatCommit(liveID: string, list: SeatInfo[]): void {
+  getSeatCommitState(liveID).pendingSeatCommit = list;
+  scheduleSeatBatch(liveID);
+}
+
+function handleSeatListPush(liveID: string, list: SeatInfo[]): void {
+  const state = getSeatCommitState(liveID);
+
+  if (!list || list.length === 0) {
+    endSwitching(state);
+    queueSeatCommit(liveID, list);
+    return;
+  }
+
+  if (!state.switching) {
+    if (state.committedSeatList.length === 0) {
+      queueSeatCommit(liveID, list);
+      return;
+    }
+    if (hasNewMember(list, state.committedSeatList)) {
+      state.switching = true;
+      state.pendingSeatList = list;
+      state.pendingStateSig = stateSignature(list);
+      if (state.switchFallbackTimer == null) {
+        state.switchFallbackTimer = setTimeout(() => {
+          state.switchFallbackTimer = null;
+          if (state.switching && state.pendingSeatList) {
+            queueSeatCommit(liveID, state.pendingSeatList);
+            endSwitching(state);
+          }
+        }, SWITCH_COMMIT_FALLBACK_MS);
+      }
+      return;
+    }
+    queueSeatCommit(liveID, list);
+    return;
+  }
+
+  if (!hasNewMember(list, state.committedSeatList)) {
+    queueSeatCommit(liveID, list);
+    endSwitching(state);
+    return;
+  }
+
+  const incomingStateSig = stateSignature(list);
+  if (incomingStateSig === state.pendingStateSig) {
+    queueSeatCommit(liveID, list);
+    endSwitching(state);
+    return;
+  }
+  state.pendingSeatList = list;
+  state.pendingStateSig = incomingStateSig;
+}
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+  return (event: WritableMap) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          seatList?: SeatInfo[];
+          canvas?: LiveCanvasParams | null;
+          speakingUsers?: Map<string, number> | null;
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (LIVE_SEAT_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'seatList') {
+              let parsedData: SeatInfo[];
+              if (Array.isArray(value)) {
+                parsedData = value as SeatInfo[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<SeatInfo[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<SeatInfo[]>(JSON.stringify(value), []);
+              }
+              updates.seatList = parsedData;
+            } else if (key === 'canvas') {
+              let parsedData: LiveCanvasParams | null;
+              if (value === null || value === undefined) {
+                parsedData = null;
+              } else if (typeof value === 'object') {
+                parsedData = value as LiveCanvasParams;
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveCanvasParams | null>(value, null);
+              } else {
+                parsedData = safeJsonParse<LiveCanvasParams | null>(JSON.stringify(value), null);
+              }
+              updates.canvas = parsedData;
+            } else if (key === 'speakingUsers') {
+              let parsedData: Map<string, number> | null;
+              if (value === null || value === undefined) {
+                parsedData = null;
+              } else if (value instanceof Map) {
+                parsedData = value;
+              } else if (typeof value === 'string') {
+                parsedData = parseMapFromJson(value);
+              } else {
+                parsedData = parseMapFromJson(JSON.stringify(value));
+              }
+              updates.speakingUsers = parsedData;
+            }
+          }
+        });
+
+        if (updates.seatList !== undefined) {
+          handleSeatListPush(liveID, updates.seatList);
+        }
+        if (updates.canvas !== undefined) {
+          getSeatCommitState(liveID).pendingCanvas = updates.canvas;
+          scheduleSeatBatch(liveID);
+        }
+        if (
+          updates.speakingUsers !== undefined &&
+          !mapEqual(updates.speakingUsers, liveSeatStore.getState(liveID).speakingUsers)
+        ) {
+          liveSeatStore.setState(liveID, {
+            speakingUsers: updates.speakingUsers,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`[LiveSeatState] ${eventName} event parse error:`, error, event);
+    }
+  };
+}
+
+const currentLiveBinding = createCurrentLiveBinding({
+  store: 'LiveSeatStore',
+  events: LIVE_SEAT_EVENTS,
+  createHandler: createNativeEventHandler,
+  reset: (liveID) => {
+    resetSeatCommitState(liveID);
+    liveSeatStore.resetState(liveID);
+  },
+});
 
 /**
  * LiveSeatState Hook
@@ -215,134 +469,10 @@ export function useLiveSeatState(liveID: string) {
     return unsubscribe;
   }, [liveID]);
 
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle seat state change events
-   * Update global store, which will automatically notify all subscribers
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-
-      // Check if data key matches any value in LIVE_SEAT_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const updates: {
-          seatList?: SeatInfo[];
-          canvas?: LiveCanvasParams | null;
-          speakingUsers?: Map<string, number> | null;
-        } = {};
-
-        Object.keys(data).forEach((key) => {
-          if (LIVE_SEAT_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'seatList') {
-              // seatList is an array type
-              let parsedData: SeatInfo[];
-              if (Array.isArray(value)) {
-                parsedData = value as SeatInfo[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<SeatInfo[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<SeatInfo[]>(JSON.stringify(value), []);
-              }
-              updates.seatList = parsedData;
-            } else if (key === 'canvas') {
-              // canvas can be an object or null
-              let parsedData: LiveCanvasParams | null;
-              if (value === null || value === undefined) {
-                parsedData = null;
-              } else if (typeof value === 'object') {
-                parsedData = value as LiveCanvasParams;
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveCanvasParams | null>(value, null);
-              } else {
-                parsedData = safeJsonParse<LiveCanvasParams | null>(JSON.stringify(value), null);
-              }
-              updates.canvas = parsedData;
-            } else if (key === 'speakingUsers') {
-              // speakingUsers requires special parsing to Map
-              let parsedData: Map<string, number> | null;
-              if (value === null || value === undefined) {
-                parsedData = null;
-              } else if (value instanceof Map) {
-                parsedData = value;
-              } else if (typeof value === 'string') {
-                parsedData = parseMapFromJson(value);
-              } else {
-                parsedData = parseMapFromJson(JSON.stringify(value));
-              }
-              updates.speakingUsers = parsedData;
-            }
-          }
-        });
-
-        // Batch update global store (only update once to avoid multiple notifications)
-        if (Object.keys(updates).length > 0) {
-          liveSeatStore.setState(liveID, updates);
-        }
-      }
-    } catch (error) {
-      console.error(`[LiveSeatState] ${eventName} event parse error:`, error);
-      console.log(`[LiveSeatState] ${eventName} event received (raw):`, event);
-    }
-  }, [liveID]);
-
-  /**
-   * Bind event listeners
-   */
   useEffect(() => {
-    if (!liveID) {
-      return;
-    }
-
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'LiveSeatStore',
-        name: eventName,
-        roomID: liveID ?? null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // Save references to listener cleanup functions
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    LIVE_SEAT_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener will automatically register event listeners on both Native and JS layers
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[LiveSeatState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      LIVE_SEAT_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent, liveID]);
+    currentLiveBinding.ensureWatchCurrentLive();
+    currentLiveBinding.bindEvent(liveID);
+  }, [liveID]);
 
   /**
    * User takes seat
@@ -374,7 +504,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Take seat failed');
+        const error = createStateError(result, 'Take seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -405,7 +535,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Leave seat failed');
+        const error = createStateError(result, 'Leave seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -436,7 +566,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Mute microphone failed');
+        const error = createStateError(result, 'Mute microphone failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -467,7 +597,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Unmute microphone failed');
+        const error = createStateError(result, 'Unmute microphone failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -506,7 +636,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Kick user out of seat failed');
+        const error = createStateError(result, 'Kick user out of seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -523,8 +653,8 @@ export function useLiveSeatState(liveID: string) {
    * ```tsx
    * await moveUserToSeat({
    *   liveID: 'your_live_id',
-   *   fromSeatIndex: 1,
-   *   toSeatIndex: 3,
+   *   userID: 'user123',
+   *   targetIndex: 3,
    *   onSuccess: () => console.log('Move user successfully'),
    *   onError: (error) => console.error('Move user failed:', error)
    * });
@@ -532,8 +662,13 @@ export function useLiveSeatState(liveID: string) {
    */
   const moveUserToSeat = useCallback(async (params: MoveUserToSeatOptions): Promise<void> => {
     // Validate required parameters
-    if (params.fromSeatIndex === undefined || params.toSeatIndex === undefined) {
-      const error = new Error('Missing required parameters: fromSeatIndex or toSeatIndex');
+    if (!params.userID) {
+      const error = new Error('Missing required parameter: userID');
+      params.onError?.(error);
+      return;
+    }
+    if (params.targetIndex === undefined) {
+      const error = new Error('Missing required parameter: targetIndex');
       params.onError?.(error);
       return;
     }
@@ -546,7 +681,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Move user to seat failed');
+        const error = createStateError(result, 'Move user to seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -585,7 +720,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Lock seat failed');
+        const error = createStateError(result, 'Lock seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -624,7 +759,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Unlock seat failed');
+        const error = createStateError(result, 'Unlock seat failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -658,7 +793,7 @@ export function useLiveSeatState(liveID: string) {
     const { onSuccess, onError, policy, ...restParams } = params;
     const cameraParams: Record<string, unknown> = {
       ...restParams,
-      ...(policy && typeof policy === 'string' && { policy: DEVICE_CONTROL_POLICY_STRING_MAP[policy] ?? 1 }),
+      ...(policy && typeof policy === 'string' ? { policy: DEVICE_CONTROL_POLICY_STRING_MAP[policy] ?? 1 } : {}),
     };
 
     try {
@@ -667,7 +802,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Open remote camera failed');
+        const error = createStateError(result, 'Open remote camera failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -706,7 +841,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Close remote camera failed');
+        const error = createStateError(result, 'Close remote camera failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -750,7 +885,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Open remote microphone failed');
+        const error = createStateError(result, 'Open remote microphone failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -789,7 +924,7 @@ export function useLiveSeatState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Close remote microphone failed');
+        const error = createStateError(result, 'Close remote microphone failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -865,5 +1000,4 @@ export function useLiveSeatState(liveID: string) {
 }
 
 export default useLiveSeatState;
-
 

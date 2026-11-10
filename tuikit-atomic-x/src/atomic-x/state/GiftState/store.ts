@@ -102,6 +102,11 @@ class GiftStore {
     }
   }
 
+  resetState(liveID: string): void {
+    this.states.delete(liveID);
+    this.notifyListeners(liveID, this.getState(liveID));
+  }
+
   /**
    * 清理指定直播间的状态
    */

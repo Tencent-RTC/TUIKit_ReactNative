@@ -1,6 +1,6 @@
 {
   "name": "tuikit-atomic-x-monorepo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "workspaces": [
     "tuikit-atomic-x",
@@ -9,8 +9,8 @@
   ],
   "packageManager": "yarn@4.11.0",
   "scripts": {
-    "tuikit": "yarn workspace react-native-tuikit-atomic-x",
-    "live": "yarn workspace react-native-tuikit-live",
+    "tuikit": "yarn workspace @tencentcloud/react-native-tuikit-atomic-x",
+    "live": "yarn workspace @tencentcloud/react-native-tuikit-live",
     "app": "yarn workspace tuikit-application",
     "clean": "yarn tuikit clean",
     "typecheck": "yarn tuikit typecheck && yarn live typecheck",

@@ -14,14 +14,29 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://trtc.io.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm,swift,cpp}"
-  s.private_header_files = "ios/**/*.h"
-  
+  s.exclude_files = "ios/view/SVGAPlayer/pbobjc/**"
+  s.public_header_files = "ios/view/SVGAPlayer/*.h"
+  s.private_header_files = "ios/TuikitAtomicX.h"
+
+  # SVGAPlayer pbobjc files must be compiled without ARC
+  s.subspec 'SVGAProto' do |ss|
+    ss.source_files = "ios/view/SVGAPlayer/pbobjc/*.{h,m}"
+    ss.requires_arc = false
+    ss.pod_target_xcconfig = {
+      'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1',
+    }
+  end
+
   # Dependencies
-  s.dependency "AtomicXCore", "3.6.3"
-  s.dependency "RTCRoomEngine/Professional", "3.6.3"
-  s.dependency "SVGAPlayer", "~> 2.5"
-  s.dependency "TXIMSDK_Plus_iOS_XCFramework", "8.9.7511"
-  s.dependency "TXLiteAVSDK_Professional", "12.9.20063"
+  s.dependency "AtomicXCore", "4.3.11"
+  s.dependency "RTCRoomEngine/Professional", "4.3.11"
+  s.dependency "Protobuf", "3.22.1"
+  s.dependency "SSZipArchive"
+  s.dependency "TXIMSDK_Plus_iOS_XCFramework", "9.0.7661"
+  s.dependency "TXLiteAVSDK_Professional", "13.5.21355"
+
+  s.frameworks = "AVFoundation"
+  s.library = "z"
 
   install_modules_dependencies(s)
 end

@@ -10,6 +10,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.tencent.cloud.tuikit.engine.room.TUIRoomEngine
 import com.tencent.imsdk.v2.V2TIMManager
 import io.trtc.tuikit.atomicxcore.hybridapi.bridge.HybridBridge
 import io.trtc.tuikit.atomicxcore.hybridapi.json.fromJson
@@ -24,6 +25,8 @@ class HybridBridgeProxyModule(reactContext: ReactApplicationContext) :
     }
 
     private val bridge = HybridBridge(reactContext.applicationContext, eventEmitter)
+
+    private val jsEventNames = mutableMapOf<Map<String, Any>, String>()
 
     override fun getName(): String {
         return NAME
@@ -49,10 +52,24 @@ class HybridBridgeProxyModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    // HybridBridge has no callExperimentalAPI route; call the engine directly like uniapp's ExperimentalApiInvoker.
+    @ReactMethod
+    fun callExperimentalAPI(json: String, promise: Promise) {
+        Log.i("Proxy-callExperimentalAPI", "json: $json")
+        mainHandler.post {
+            TUIRoomEngine.sharedInstance().callExperimentalAPI(json) { result ->
+                mainHandler.post {
+                    promise.resolve(result ?: "")
+                }
+            }
+        }
+    }
+
     @ReactMethod
     fun addEventListener(key: String) {
         Log.i("Proxy-Listener", "add key: $key")
         mainHandler.post {
+            listenerIdentity(key)?.let { jsEventNames[it] = key }
             bridge.addListener(key)
         }
     }
@@ -61,6 +78,7 @@ class HybridBridgeProxyModule(reactContext: ReactApplicationContext) :
     fun removeEventListener(key: String) {
         Log.i("Proxy-Listener", "remove key: $key")
         mainHandler.post {
+            listenerIdentity(key)?.let { jsEventNames.remove(it) }
             bridge.removeListener(key)
         }
     }
@@ -75,11 +93,15 @@ class HybridBridgeProxyModule(reactContext: ReactApplicationContext) :
             return
         }
         val writableMap = mapToWritableMap(paramsMap)
-        Log.i("Proxy-Event", "eventName: $eventName params: $writableMap")
+        val jsEventName = listenerIdentity(eventName)?.let { jsEventNames[it] } ?: eventName
         reactApplicationContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit(eventName, writableMap)
+            .emit(jsEventName, writableMap)
     }
+
+    // Native re-serializes the key (e.g. adds "params":null), so JS-registered names are matched by content.
+    private fun listenerIdentity(key: String): Map<String, Any>? =
+        key.fromJson<Map<String, Any?>>()?.filterValues { it != null }?.mapValues { it.value!! }
 
     private fun mapToWritableMap(map: Map<String, Any>): WritableMap? {
         val writableMap = Arguments.createMap()

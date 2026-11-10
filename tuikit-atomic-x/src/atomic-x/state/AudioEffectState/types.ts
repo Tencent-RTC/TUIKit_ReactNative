@@ -3,34 +3,40 @@
  */
 
 /**
- * 变声器类型参数
+ * 变声器类型
  */
-export type AudioChangerTypeParam =
-  | 'NONE'
-  | 'CHILD'
-  | 'LITTLE_GIRL'
-  | 'MAN'
-  | 'HEAVY_METAL'
-  | 'COLD'
-  | 'FOREIGNER'
-  | 'TRAPPED_BEAST'
-  | 'FATSO'
-  | 'STRONG_CURRENT'
-  | 'HEAVY_MACHINERY'
-  | 'ETHEREAL';
+export const AudioChangerType = {
+  NONE: 0,
+  CHILD: 1,
+  LITTLE_GIRL: 2,
+  MAN: 3,
+  HEAVY_METAL: 4,
+  COLD: 5,
+  FOREIGNER: 6,
+  TRAPPED_BEAST: 7,
+  FATSO: 8,
+  STRONG_CURRENT: 9,
+  HEAVY_MACHINERY: 10,
+  ETHEREAL: 11,
+} as const;
+
+export type AudioChangerTypeParam = keyof typeof AudioChangerType;
 
 /**
- * 混响类型参数
+ * 混响类型
  */
-export type AudioReverbTypeParam =
-  | 'NONE'
-  | 'KTV'
-  | 'SMALL_ROOM'
-  | 'AUDITORIUM'
-  | 'DEEP'
-  | 'LOUD'
-  | 'METALLIC'
-  | 'MAGNETIC';
+export const AudioReverbType = {
+  NONE: 0,
+  KTV: 1,
+  SMALL_ROOM: 2,
+  AUDITORIUM: 3,
+  DEEP: 4,
+  LOUD: 5,
+  METALLIC: 6,
+  MAGNETIC: 7,
+} as const;
+
+export type AudioReverbTypeParam = keyof typeof AudioReverbType;
 
 /**
  * 设置变声效果选项

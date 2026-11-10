@@ -1,0 +1,255 @@
+{
+  "common": {
+    "confirm": "确认",
+    "cancel": "取消",
+    "complete": "完成",
+    "unknown": "未知",
+    "me": "我",
+    "anchor": "主播",
+    "SearchCompleted": "搜索完成"
+  },
+  "keepAlive": {
+    "title": "音频服务",
+    "description": "正在运行"
+  },
+  "toast": {
+    "micDisabledByAnchor": "麦克风已被主播禁用",
+    "cameraDisabledByAnchor": "摄像头已被主播禁用",
+    "refreshSuccess": "刷新成功",
+    "refreshFailed": "刷新失败：请稍后重试",
+    "noMore": "没有更多了",
+    "operationFailed": "操作失败",
+    "userMuted": "已将 {{name}} 静音",
+    "userUnmuted": "已解除 {{name}} 的静音",
+    "userCameraClosed": "已禁画 {{name}}",
+    "userCameraOpened": "已解除 {{name}} 的禁画",
+    "joinRoomFailed": "加入房间失败"
+  },
+  "liveList": {
+    "title": "在线直播",
+    "loading": "加载中...",
+    "noLiveRooms": "暂无直播间",
+    "enterLiveId": "请输入 liveID",
+    "searchPlaceholder": "输入房间名称、主播名称或房间ID"
+  },
+  "beforeLive": {
+    "public": "公开",
+    "private": "隐私",
+    "cover": "封面",
+    "category": "直播分类",
+    "roomNamePlaceholder": "请输入直播间名称",
+    "startLive": "开始直播"
+  },
+  "liveRoom": {
+    "mute": "静音",
+    "unmute": "取消静音"
+  },
+  "coGuest": {
+    "requestList": "连麦申请",
+    "accept": "接受",
+    "reject": "拒绝",
+    "noRequests": "暂无连麦申请",
+    "title": "选择连麦方式",
+    "waitingForAnchor": "选择连麦方式，主播同意后接通",
+    "applyVideo": "申请视频连麦",
+    "applyAudio": "申请语音连麦",
+    "disconnectCoGuest": "移下麦",
+    "disconnect": "断开连麦",
+    "disconnectConfirm": "确定要断开连麦吗？",
+    "notSupportCoGuest": "您当前无法执行此操作（可能是无权限，或受场景限制等原因）"
+  },
+  "coHost": {
+    "hostBusy": "被邀请连线的房间与其他房间连线中",
+    "inviting": "邀请中...",
+    "inviteHost": "邀请连线",
+    "invite": "邀请连线",
+    "disconnect": "断开连线",
+    "connected": "连线中",
+    "onlineAnchors": "推荐列表",
+    "disconnectConfirm": "确定要断开连线吗？"
+  },
+  "barrage": {
+    "placeholder": "聊聊吧！",
+    "gift": "{{name}} 送出了 {{gift}}",
+    "tooLong": "内容过长",
+    "send": "发送"
+  },
+  "gift": {
+    "title": "礼物",
+    "send": "发送",
+    "noGifts": "暂无礼物"
+  },
+  "audioEffect": {
+    "title": "音效设置",
+    "earReturn": "耳返",
+    "earReturnVolume": "耳返音量",
+    "voiceChange": "变声",
+    "voiceOriginal": "原声",
+    "voiceChild": "童声",
+    "voiceLoli": "萝莉",
+    "voiceUncle": "大叔",
+    "voiceMetal": "金属",
+    "voiceHeavyMetal": "重金属",
+    "voiceEthereal": "空灵",
+    "reverb": "混响",
+    "reverbNone": "无效果",
+    "reverbKTV": "KTV",
+    "reverbRoom": "小房间",
+    "reverbHall": "大会堂",
+    "reverbLowDeep": "低沉",
+    "reverbLoud": "洪亮",
+    "reverbMetal": "金属声",
+    "reverbMagnetic": "磁性",
+    "bgMusic": "背景音乐",
+    "bgMusicVolume": "音乐音量",
+    "voiceVolume": "人声音量",
+    "musicList": "音乐列表",
+    "noMusic": "暂无音乐",
+    "play": "播放",
+    "pause": "暂停",
+    "stop": "停止"
+  },
+  "settings": {
+    "audio": "音频设置",
+    "muteVideo": "关闭视频",
+    "openCamera": "开启视频",
+    "disableVideo": "禁用视频",
+    "muteAudio": "关闭音频",
+    "openAudio": "打开音频"
+  },
+  "audienceList": {
+    "confirmKickOut": "确认踢出 {{name}} 吗？",
+    "RemoveOut": "移出房间"
+  },
+  "liveStreamAction": {
+    "beauty": "美颜",
+    "audioEffect": "音效",
+    "flipCamera": "翻转"
+  },
+  "LiveListPage": {
+    "title": "在线直播",
+    "create": "开直播"
+  },
+  "anchor": {
+    "coHostAccepted": "连线被同意",
+    "coHostRejected": "连线被拒绝",
+    "coHostTimeout": "连线请求超时",
+    "giftToMe": "我",
+    "giftTo": "送给{{receiver}}{{gift}} x{{count}}",
+    "defaultName": "主播",
+    "myLive": "我的直播",
+    "createLiveFailed": "创建直播失败：{{error}}",
+    "createLiveFailedUnknown": "创建直播失败：未知错误",
+    "coGuestInProgress": "连麦中，不可以使用连线功能",
+    "endLiveFailed": "结束直播失败：{{error}}",
+    "frontCameraOnly": "仅前置摄像头支持该设置",
+    "linkHost": "连主播",
+    "linkGuest": "连麦",
+    "more": "更多",
+    "coHostInvite": "{{name}}向你发来连线邀请",
+    "accept": "接受",
+    "reject": "拒绝",
+    "disconnectCoHost": "断开连线",
+    "closeLiveRoom": "关闭直播间",
+    "moreFeatures": "更多功能",
+    "beauty": "美颜",
+    "audioEffect": "音效",
+    "flip": "翻转",
+    "mirror": "镜像",
+    "dashboard": "仪表盘",
+    "applyCoGuest": "申请连麦({{count}})"
+  },
+  "audience": {
+    "defaultName": "主播",
+    "liveEnded": "直播已结束",
+    "kickedOut": "被踢出直播间",
+    "applicationRejected": "上麦申请被拒绝",
+    "applicationTimeout": "上麦申请超时",
+    "kickedOffSeat": "被主持人移下麦",
+    "cameraUnmuted": "您已被解除禁画",
+    "cameraMuted": "您已被禁画",
+    "micUnmuted": "您已被解除禁音",
+    "micMuted": "您已被禁音",
+    "exitLiveRoom": "退出直播间",
+    "cancelCoGuestApply": "取消连麦申请",
+    "disconnectCoGuest": "断开连麦",
+    "sendGiftFailed": "礼物发送失败：{{error}}",
+    "rechargeDeveloping": "充值功能：功能开发中",
+    "giftTo": "送给{{receiver}}{{gift}} x{{count}}",
+    "giftToMe": "我"
+  },
+  "liveEnd": {
+    "title": "直播已结束",
+    "duration": "直播时长",
+    "totalViewers": "累计观看",
+    "messageCount": "消息数量",
+    "giftIncome": "礼物收入",
+    "giftSenders": "送礼人数",
+    "likeCount": "点赞数量"
+  },
+  "networkQualityPanel": {
+    "title": "仪表盘",
+    "delay": "往返延时",
+    "downLoss": "下行丢包率",
+    "upLoss": "上行丢包率"
+  },
+  "userInfoPanel": {
+    "liveRoomId": "直播房间ID",
+    "userId": "UserId"
+  },
+  "audienceListPanel": {
+    "title": "在线观众",
+    "noAudience": "暂无观众"
+  },
+  "liveCard": {
+    "joining": "进入中...",
+    "viewerCount": "{{viewerCount}}人看过",
+    "unknownUser": "未知用户",
+    "unknownRoom": "未命名直播间"
+  },
+  "beauty": {
+    "smooth": "磨皮",
+    "whitening": "美白",
+    "ruddy": "红润",
+    "close": "关闭"
+  },
+  "livePage": {
+    "description1": "通过 Live API 构建互动视频直播，",
+    "description2": "为您带来清晰流畅的直播体验。"
+  },
+  "app": {
+    "brandName": "腾讯云音视频",
+    "live": "直播",
+    "liveDesc": "开播预览·智能美颜·连麦PK"
+  },
+  "login": {
+    "userId": "用户id",
+    "userIdPlaceholder": "请输入userid",
+    "login": "登录",
+    "enterUserId": "请输入 UserID",
+    "userSigError": "错误：UserSig 生成失败，请配置 UserSig 生成服务",
+    "loginFailed": "登录失败：{{error}}",
+    "loginException": "登录异常：{{error}}"
+  },
+  "profile": {
+    "notSet": "未设置",
+    "fullNickname": "完整昵称",
+    "nicknameEmpty": "昵称不能为空",
+    "nicknameSuccess": "昵称修改成功",
+    "nicknameFailed": "修改失败，请重试",
+    "avatarSuccess": "头像设置成功",
+    "avatarFailed": "设置失败，请重试",
+    "tip": "提示",
+    "logoutConfirm": "确定要退出登录吗？",
+    "logoutFailed": "退出失败，请重试",
+    "title": "个人中心",
+    "nickname": "昵称",
+    "nicknameLabel": "昵称:",
+    "userIdLabel": "用户ID:",
+    "editNickname": "修改昵称",
+    "nicknamePlaceholder": "请输入昵称",
+    "setAsAvatar": "设为头像",
+    "systemGallery": "系统图库",
+    "logout": "退出登录"
+  }
+}

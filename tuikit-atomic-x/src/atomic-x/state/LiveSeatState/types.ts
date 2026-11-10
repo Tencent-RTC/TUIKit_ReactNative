@@ -27,8 +27,14 @@ export interface LiveCanvasParams {
  */
 export interface SeatUserInfoParam {
   userID: string;
-  nickname?: string;
+  userName?: string;
   avatarURL?: string;
+  role?: number | string;
+  liveID?: string;
+  microphoneStatus?: number | string;
+  allowOpenMicrophone?: boolean;
+  cameraStatus?: number | string;
+  allowOpenCamera?: boolean;
   [key: string]: unknown;
 }
 
@@ -93,8 +99,8 @@ export interface KickUserOutOfSeatOptions extends Record<string, unknown> {
  * 移动用户到座位选项
  */
 export interface MoveUserToSeatOptions extends Record<string, unknown> {
-  fromSeatIndex: number;
-  toSeatIndex: number;
+  userID: string;
+  targetIndex: number;
   onSuccess?: () => void;
   onError?: (error: Error | string) => void;
   [key: string]: unknown;
