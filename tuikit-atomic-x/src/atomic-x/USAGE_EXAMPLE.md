@@ -15,16 +15,21 @@ import { login, getLiveList, createLiveRoom } from './src/atomic-x';
 ```typescript
 import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { Toast } from '@tencentcloud/react-native-tuikit-atomic-x';
 import { login, checkLoginStatus } from './src/atomic-x';
-import Toast from 'react-native-toast-message';
 
 function LoginScreen() {
   const [userID, setUserID] = useState('');
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState({ visible: false, title: '', seq: 0 });
+
+  const showToast = (title: string) => {
+    setToast((prev) => ({ visible: true, title, seq: prev.seq + 1 }));
+  };
 
   const handleLogin = async () => {
     if (!userID.trim()) {
-      Toast.show({ type: 'info', text1: '提示', text2: '请输入 UserID' });
+      showToast('请输入 UserID');
       return;
     }
 
@@ -40,17 +45,9 @@ function LoginScreen() {
     setLoading(false);
 
     if (result.success) {
-      Toast.show({
-        type: 'success',
-        text1: '登录成功',
-        text2: `用户: ${result.data?.userID}`,
-      });
+      showToast(`登录成功：${result.data?.userID}`);
     } else {
-      Toast.show({
-        type: 'error',
-        text1: '登录失败',
-        text2: result.error || '未知错误',
-      });
+      showToast(`登录失败：${result.error || '未知错误'}`);
     }
   };
 
@@ -68,6 +65,13 @@ function LoginScreen() {
           <Text>登录</Text>
         )}
       </TouchableOpacity>
+      <Toast
+        key={toast.seq}
+        visible={toast.visible}
+        title={toast.title}
+        duration={2000}
+        onClose={() => setToast((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

@@ -1,6 +1,6 @@
 {
-  "name": "react-native-tuikit-live",
-  "version": "0.0.1-beta",
+  "name": "@tencentcloud/react-native-tuikit-live",
+  "version": "0.1.0",
   "description": "TUIKit Live UI module for React Native - provides live streaming pages including anchor, audience, live list and live end pages.",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -31,17 +31,23 @@
     "registry": "https://registry.npmjs.org/"
   },
   "peerDependencies": {
+    "@react-native-clipboard/clipboard": "1.16.3",
+    "@react-native-community/netinfo": "12.0.1",
+    "@sayem314/react-native-keep-awake": "2.0.0",
+    "@tencentcloud/react-native-tuikit-atomic-x": "*",
     "react": "*",
     "react-native": "*",
-    "react-native-safe-area-context": "^5.0.0",
-    "react-native-tuikit-atomic-x": "*"
+    "react-native-safe-area-context": "^5.0.0"
   },
   "devDependencies": {
+    "@react-native-clipboard/clipboard": "1.16.3",
+    "@react-native-community/netinfo": "12.0.1",
+    "@sayem314/react-native-keep-awake": "2.0.0",
+    "@tencentcloud/react-native-tuikit-atomic-x": "workspace:*",
     "@types/react": "^19.2.0",
     "react": "19.1.1",
     "react-native": "0.82.1",
     "react-native-safe-area-context": "^5.6.2",
-    "react-native-tuikit-atomic-x": "workspace:*",
     "typescript": "^5.8.3"
   },
   "packageManager": "yarn@4.11.0"

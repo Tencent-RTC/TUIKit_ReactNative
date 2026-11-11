@@ -6,6 +6,10 @@ RCT_EXTERN_METHOD(callAPI:(NSString *)json
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(callExperimentalAPI:(NSString *)json
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(addEventListener:(NSString *)key)
 
 RCT_EXTERN_METHOD(removeEventListener:(NSString *)key)

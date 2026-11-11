@@ -8,6 +8,7 @@ export * from './LoginState/types';
 
 // 导出 LiveListState
 export { useLiveListState, default as useLiveListStateDefault } from './LiveListState';
+export { LiveInfoModifyFlag } from './LiveListState/types';
 // 导出类型，但排除内部类型 ILiveListener 以避免冲突
 export type {
   TakeSeatModeType,
@@ -19,6 +20,7 @@ export type {
   LeaveLiveOptions,
   EndLiveOptions,
   UpdateLiveInfoOptions,
+  LiveInfoModifyFlagType,
   CallExperimentalAPIOptions,
 } from './LiveListState/types';
 
@@ -89,7 +91,12 @@ export type {
 } from './LiveSeatState/types';
 
 // 导出 DeviceState
-export { useDeviceState, default as useDeviceStateDefault } from './DeviceState';
+export {
+  useDeviceState,
+  useDeviceActions,
+  getDeviceState,
+  default as useDeviceStateDefault,
+} from './DeviceState';
 // 导出类型，但排除 VolumeOptions 以避免与 AudioEffectState 冲突
 export type {
   DeviceStatusCodeType,
@@ -100,6 +107,7 @@ export type {
   OpenLocalMicrophoneOptions,
   SetAudioRouteOptions,
   OpenLocalCameraOptions,
+  StartCameraTestOptions,
   SwitchCameraOptions,
   UpdateVideoQualityOptions,
   SwitchMirrorOptions,
@@ -124,7 +132,12 @@ export type {
 } from './LikeState/types';
 
 // 导出 BaseBeautyState
-export { useBaseBeautyState, default as useBaseBeautyStateDefault } from './BaseBeautyState';
+export {
+  useBaseBeautyState,
+  useBaseBeautyActions,
+  getBaseBeautyState,
+  default as useBaseBeautyStateDefault,
+} from './BaseBeautyState';
 export type {
   SetSmoothLevelOptions,
   SetWhitenessLevelOptions,
@@ -134,7 +147,11 @@ export type {
 } from './BaseBeautyState/types';
 
 // 导出 AudioEffectState
-export { useAudioEffectState, default as useAudioEffectStateDefault } from './AudioEffectState';
+export {
+  useAudioEffectState,
+  useAudioEffectActions,
+  default as useAudioEffectStateDefault,
+} from './AudioEffectState';
 export type {
   AudioChangerTypeParam,
   AudioReverbTypeParam,

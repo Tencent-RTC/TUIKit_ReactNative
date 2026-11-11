@@ -8,9 +8,9 @@
  * Application Scenarios: Beauty live streaming, image enhancement, beauty adjustment, live beautification, and other scenarios requiring beauty functions.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { callNativeAPI } from '../../utils';
-import { addListener, removeListener } from '../../bridge/HybridBridge';
+import { useState, useEffect, useCallback } from 'react';
+import { callNativeAPI, createStateError } from '../../utils';
+import { addListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
   SetSmoothLevelOptions,
@@ -22,11 +22,6 @@ import type {
 import { baseBeautyStore } from './store';
 
 /**
- * Beauty listener function type
- */
-type ILiveListener = (params?: unknown) => void;
-
-/**
  * Beauty state event name constants
  */
 const BEAUTY_EVENTS = [
@@ -35,20 +30,63 @@ const BEAUTY_EVENTS = [
   'ruddyLevel',
 ];
 
+
 /**
- * Safe JSON parse
+ * Handle beauty state change events (module-level, shared by all hook instances)
  */
-function safeJsonParse<T>(json: string, defaultValue: T): T {
-  try {
-    if (!json || typeof json !== 'string') {
-      return defaultValue;
+function handleNativeEvent(eventName: string) {
+  return (event: Record<string, unknown>) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          smoothLevel?: number;
+          whitenessLevel?: number;
+          ruddyLevel?: number;
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (BEAUTY_EVENTS.includes(key)) {
+            const value = data[key];
+            if (key === 'smoothLevel') {
+              updates.smoothLevel = typeof value === 'number' ? value : (Number(value) || 0);
+            } else if (key === 'whitenessLevel') {
+              updates.whitenessLevel = typeof value === 'number' ? value : (Number(value) || 0);
+            } else if (key === 'ruddyLevel') {
+              updates.ruddyLevel = typeof value === 'number' ? value : (Number(value) || 0);
+            }
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          baseBeautyStore.setState(updates);
+        }
+      }
+    } catch (error) {
+      console.error(`[BaseBeautyState] ${eventName} event parse error:`, error);
     }
-    return JSON.parse(json) as T;
-  } catch (error) {
-    console.error('safeJsonParse error:', error);
-    return defaultValue;
-  }
+  };
 }
+
+/**
+ * Register Native event listeners at module load time (once, never removed)
+ */
+BEAUTY_EVENTS.forEach((eventName) => {
+  const keyObject: HybridListenerKey = {
+    type: 'state',
+    store: 'BaseBeautyStore',
+    name: eventName,
+    roomID: null,
+    listenerID: null,
+  };
+  const key = JSON.stringify(keyObject);
+  addListener(key, handleNativeEvent(eventName));
+});
 
 /**
  * BaseBeautyState Hook
@@ -64,7 +102,7 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  *     ruddyLevel,
  *     setSmoothLevel,
  *     setWhitenessLevel 
- *   } = useBaseBeautyState('your_live_id');
+ *   } = useBaseBeautyState();
  * 
  *   const handleSetSmooth = async () => {
  *     await setSmoothLevel({
@@ -85,9 +123,9 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
  * }
  * ```
  */
-export function useBaseBeautyState(liveID: string) {
+function useBaseBeauty(listen: boolean) {
   // Get initial state from global store
-  const initialState = baseBeautyStore.getState(liveID);
+  const initialState = baseBeautyStore.getState();
 
   /**
    * Smoothing level
@@ -117,12 +155,9 @@ export function useBaseBeautyState(liveID: string) {
 
   // Subscribe to global store state changes
   useEffect(() => {
-    if (!liveID) {
-      return;
-    }
-
+    if (!listen) return undefined;
     // Subscribe to state changes
-    const unsubscribe = baseBeautyStore.subscribe(liveID, (state) => {
+    const unsubscribe = baseBeautyStore.subscribe((state) => {
       setSmoothLevelState(state.smoothLevel);
       setWhitenessLevelState(state.whitenessLevel);
       setRuddyLevelState(state.ruddyLevel);
@@ -130,110 +165,8 @@ export function useBaseBeautyState(liveID: string) {
       setRealUiValues(state.realUiValues);
     });
 
-    // Clean up subscription
     return unsubscribe;
-  }, [liveID]);
-
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle beauty state change events
-   * Update global store, store will automatically notify all subscribers
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[BaseBeautyState] ${eventName} event received:`, JSON.stringify(data));
-
-      // Check if data's keys match any values in BEAUTY_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const updates: {
-          smoothLevel?: number;
-          whitenessLevel?: number;
-          ruddyLevel?: number;
-        } = {};
-
-        Object.keys(data).forEach((key) => {
-          if (BEAUTY_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'smoothLevel') {
-              // smoothLevel is number type
-              const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
-              updates.smoothLevel = parsedData;
-            } else if (key === 'whitenessLevel') {
-              // whitenessLevel is number type
-              const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
-              updates.whitenessLevel = parsedData;
-            } else if (key === 'ruddyLevel') {
-              // ruddyLevel is number type
-              const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
-              updates.ruddyLevel = parsedData;
-            }
-          }
-        });
-
-        // Batch update global store (only update once to avoid multiple notifications)
-        if (Object.keys(updates).length > 0) {
-          baseBeautyStore.setState(liveID, updates);
-        }
-      }
-    } catch (error) {
-      console.error(`[BaseBeautyState] ${eventName} event parse error:`, error);
-      console.log(`[BaseBeautyState] ${eventName} event received (raw):`, event);
-    }
-  }, [liveID]);
-
-  /**
-   * Bind event listeners
-   */
-  useEffect(() => {
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'BaseBeautyStore',
-        name: eventName,
-        roomID: null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // Save listener cleanup function references
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    BEAUTY_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener will automatically register Native and JS layer event listeners
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[BaseBeautyState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      BEAUTY_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent]);
+  }, [listen]);
 
   /**
    * Set smoothing level
@@ -272,7 +205,7 @@ export function useBaseBeautyState(liveID: string) {
         // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Set smooth level failed');
+        const error = createStateError(result, 'Set smooth level failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -318,7 +251,7 @@ export function useBaseBeautyState(liveID: string) {
         // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Set whiteness level failed');
+        const error = createStateError(result, 'Set whiteness level failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -364,7 +297,7 @@ export function useBaseBeautyState(liveID: string) {
         // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Set ruddy level failed');
+        const error = createStateError(result, 'Set ruddy level failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -376,7 +309,7 @@ export function useBaseBeautyState(liveID: string) {
   /**
    * Set real UI value
    * Update both component local state and global store to ensure persistence
-   * 
+   *
    * @param type - Beauty type
    * @param value - Value
    * @example
@@ -391,14 +324,14 @@ export function useBaseBeautyState(liveID: string) {
         [type]: value,
       };
       // Sync update to global store to ensure persistence
-      baseBeautyStore.setState(liveID, { realUiValues: newValues });
+      baseBeautyStore.setState({ realUiValues: newValues });
       return newValues;
     });
-  }, [liveID]);
+  }, []);
 
   /**
    * Get real UI value
-   * 
+   *
    * @param type - Beauty type
    * @returns Real UI value
    * @example
@@ -413,7 +346,7 @@ export function useBaseBeautyState(liveID: string) {
   /**
    * Reset real UI values
    * Reset both component local state and global store
-   * 
+   *
    * @example
    * ```tsx
    * resetRealUiValues();
@@ -427,52 +360,7 @@ export function useBaseBeautyState(liveID: string) {
     };
     setRealUiValues(resetValues);
     // Sync reset to global store
-    baseBeautyStore.setState(liveID, { realUiValues: resetValues });
-  }, [liveID]);
-
-  /**
-   * Add beauty event listener
-   *
-   * @param eventName - Event name
-   * @param listener - Event callback function
-   * @param listenerID - Listener ID (optional)
-   * @example
-   * ```tsx
-   * addBeautyListener('onBeautyLevelChanged', (params) => {
-   *   console.log('Beauty level changed:', params);
-   * });
-   * ```
-   */
-  const addBeautyListener = useCallback((eventName: string, listener: ILiveListener, listenerID?: string): void => {
-    const createListenerKeyObject: HybridListenerKey = {
-      type: 'state',
-      store: 'BaseBeautyStore',
-      name: eventName,
-      roomID: null,
-      listenerID: listenerID ?? null,
-    };
-    addListener(JSON.stringify(createListenerKeyObject), listener);
-  }, []);
-
-  /**
-   * Remove beauty event listener
-   *
-   * @param eventName - Event name
-   * @param listenerID - Listener ID (optional)
-   * @example
-   * ```tsx
-   * removeBeautyListener('onBeautyLevelChanged');
-   * ```
-   */
-  const removeBeautyListener = useCallback((eventName: string, listenerID?: string): void => {
-    const createListenerKeyObject: HybridListenerKey = {
-      type: 'state',
-      store: 'BaseBeautyStore',
-      name: eventName,
-      roomID: null,
-      listenerID: listenerID ?? null,
-    };
-    removeListener(JSON.stringify(createListenerKeyObject));
+    baseBeautyStore.setState({ realUiValues: resetValues });
   }, []);
 
   return {
@@ -486,8 +374,24 @@ export function useBaseBeautyState(liveID: string) {
     setRealUiValue,      // Set real UI value method
     getRealUiValue,      // Get real UI value method
     resetRealUiValues,   // Reset real UI values method
-    addBeautyListener,   // Add beauty event listener
-    removeBeautyListener, // Remove beauty event listener
+  };
+}
+
+export function useBaseBeautyState() {
+  return useBaseBeauty(true);
+}
+
+export function useBaseBeautyActions() {
+  const { setSmoothLevel, setWhitenessLevel, setRuddyLevel } = useBaseBeauty(false);
+  return { setSmoothLevel, setWhitenessLevel, setRuddyLevel };
+}
+
+export function getBaseBeautyState() {
+  const state = baseBeautyStore.getState();
+  return {
+    smoothLevel: state.smoothLevel,
+    whitenessLevel: state.whitenessLevel,
+    ruddyLevel: state.ruddyLevel,
   };
 }
 

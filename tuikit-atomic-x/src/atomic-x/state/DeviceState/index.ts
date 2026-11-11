@@ -10,8 +10,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
-import { callNativeAPI } from '../../utils';
-import { addListener, removeListener } from '../../bridge/HybridBridge';
+import { callNativeAPI, createStateError } from '../../utils';
+import { addListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import {
     DeviceStatus,
@@ -31,6 +31,7 @@ import type {
     SetAudioRouteOptions,
     OpenLocalCameraOptions,
     SwitchCameraOptions,
+    StartCameraTestOptions,
     UpdateVideoQualityOptions,
     SwitchMirrorOptions,
     VolumeOptions,
@@ -38,11 +39,7 @@ import type {
     LocalVideoQuality,
 } from './types';
 import { deviceStore } from './store';
-
-/**
- * Device listener function type
- */
-type ILiveListener = (params?: unknown) => void;
+import { shallowEqual } from '../internal/equality';
 
 /**
  * Device status event name constants
@@ -135,8 +132,116 @@ function mapErrorCodeToDeviceError(errorCode: number): DeviceErrorType | null {
     }
     return mappedError;
 }
+/**
+ * Handle device status change events (module-level, shared by all hook instances)
+ */
+function handleNativeEvent(eventName: string) {
+    return (event: Record<string, unknown>) => {
+        try {
+            const data = event && typeof event === 'object' && !Array.isArray(event)
+                ? event
+                : typeof event === 'string'
+                    ? JSON.parse(event)
+                    : event;
 
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                const updates: Record<string, unknown> = {};
 
+                Object.keys(data).forEach((key) => {
+                    if (DEVICE_EVENTS.includes(key)) {
+                        const value = data[key];
+
+                        if (key === 'microphoneStatus') {
+                            const statusCode = typeof value === 'number' ? value : (Number(value) || -1);
+                            const status = mapStatusCodeToDeviceStatus(statusCode);
+                            if (status) {
+                                updates.microphoneStatus = status;
+                            }
+                        } else if (key === 'microphoneLastError') {
+                            const errorCode = typeof value === 'number' ? value : (Number(value) || -1);
+                            const error = mapErrorCodeToDeviceError(errorCode);
+                            if (error) {
+                                updates.microphoneLastError = error;
+                            }
+                        } else if (key === 'captureVolume') {
+                            updates.captureVolume = typeof value === 'number' ? value : (Number(value) || 0);
+                        } else if (key === 'currentMicVolume') {
+                            updates.currentMicVolume = typeof value === 'number' ? value : (Number(value) || 0);
+                        } else if (key === 'outputVolume') {
+                            updates.outputVolume = typeof value === 'number' ? value : (Number(value) || 0);
+                        } else if (key === 'cameraStatus') {
+                            const statusCode = typeof value === 'number' ? value : (Number(value) || -1);
+                            const status = mapStatusCodeToDeviceStatus(statusCode);
+                            if (status) {
+                                updates.cameraStatus = status;
+                            }
+                        } else if (key === 'cameraLastError') {
+                            const errorCode = typeof value === 'number' ? value : (Number(value) || -1);
+                            const error = mapErrorCodeToDeviceError(errorCode);
+                            if (error) {
+                                updates.cameraLastError = error;
+                            }
+                        } else if (key === 'isFrontCamera') {
+                            updates.isFrontCamera = typeof value === 'boolean' ? value : Boolean(value);
+                        } else if (key === 'localMirrorType') {
+                            updates.localMirrorType = typeof value === 'number' ? value as MirrorType : (Number(value) as MirrorType);
+                        } else if (key === 'localVideoQuality') {
+                            const payloadStr = typeof value === 'string' ? value : JSON.stringify(value);
+                            const localVideoQuality = safeJsonParse<LocalVideoQuality>(payloadStr, {} as LocalVideoQuality);
+                            if (!shallowEqual(localVideoQuality, deviceStore.getState().localVideoQuality)) {
+                                updates.localVideoQuality = localVideoQuality;
+                            }
+                        } else if (key === 'currentAudioRoute') {
+                            const payloadStr = typeof value === 'string' ? value : JSON.stringify(value);
+                            const currentAudioRoute = safeJsonParse<AudioOutputType>(payloadStr, AudioOutput.SPEAKERPHONE);
+                            if (!shallowEqual(currentAudioRoute, deviceStore.getState().currentAudioRoute)) {
+                                updates.currentAudioRoute = currentAudioRoute;
+                            }
+                        } else if (key === 'screenStatus') {
+                            const statusCode = typeof value === 'number' ? value : (Number(value) || -1);
+                            const status = mapStatusCodeToDeviceStatus(statusCode);
+                            if (status) {
+                                updates.screenStatus = status;
+                            }
+                        } else if (key === 'networkInfo') {
+                            const networkInfo = typeof value === 'string'
+                                ? safeJsonParse<NetworkInfo>(value, {} as NetworkInfo)
+                                : ((value ?? {}) as NetworkInfo);
+                            if (!shallowEqual(networkInfo, deviceStore.getState().networkInfo)) {
+                                updates.networkInfo = networkInfo;
+                            }
+                        }
+                    }
+                });
+
+                if (Object.keys(updates).length > 0) {
+                    deviceStore.setState(updates);
+                }
+            }
+        } catch (error) {
+            console.error(`[DeviceState] ${eventName} event parse error:`, error);
+        }
+    };
+}
+
+/**
+ * Register Native event listeners at module load time (once, never removed)
+ */
+DEVICE_EVENTS.forEach((eventName) => {
+    const keyObject: HybridListenerKey = {
+        type: 'state',
+        store: 'DeviceStore',
+        name: eventName,
+        roomID: null,
+        listenerID: null,
+    };
+    const key = JSON.stringify(keyObject);
+    addListener(key, handleNativeEvent(eventName));
+});
+
+export function clearDeviceState(): void {
+    deviceStore.clearState();
+}
 
 /**
  * DeviceState Hook
@@ -169,7 +274,7 @@ function mapErrorCodeToDeviceError(errorCode: number): DeviceErrorType | null {
  * }
  * ```
  */
-export function useDeviceState() {
+function useDevice(listen: boolean) {
     // Get initial state from global store
     const initialState = deviceStore.getState();
 
@@ -357,6 +462,7 @@ export function useDeviceState() {
 
     // Subscribe to global store state changes
     useEffect(() => {
+        if (!listen) return undefined;
         // Subscribe to state changes
         const unsubscribe = deviceStore.subscribe((state) => {
             setMicrophoneStatus(state.microphoneStatus);
@@ -377,141 +483,7 @@ export function useDeviceState() {
 
         // Clean up subscription
         return unsubscribe;
-    }, []);
-
-    type WritableMap = Record<string, unknown>;
-
-    /**
-     * Handle device status change events
-     * Updates global store, which automatically notifies all subscribers
-     */
-    const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-        try {
-            // If event is already an object, use it directly; otherwise try to parse
-            const data = event && typeof event === 'object' && !Array.isArray(event)
-                ? event
-                : typeof event === 'string'
-                    ? JSON.parse(event)
-                    : event;
-
-            // Check if data's keys match any value in DEVICE_EVENTS
-            if (data && typeof data === 'object' && !Array.isArray(data)) {
-                const updates: Partial<typeof initialState> = {};
-
-                Object.keys(data).forEach((key) => {
-                    if (DEVICE_EVENTS.includes(key)) {
-                        const value = data[key];
-
-                        // Update corresponding reactive data based on different keys
-                        if (key === 'microphoneStatus') {
-                            const statusCode = typeof value === 'number' ? value : (Number(value) || -1);
-                            const status = mapStatusCodeToDeviceStatus(statusCode);
-                            if (status) {
-                                updates.microphoneStatus = status;
-                            }
-                        } else if (key === 'microphoneLastError') {
-                            const errorCode = typeof value === 'number' ? value : (Number(value) || -1);
-                            const error = mapErrorCodeToDeviceError(errorCode);
-                            if (error) {
-                                updates.microphoneLastError = error;
-                            }
-                        } else if (key === 'captureVolume') {
-                            const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
-                            updates.captureVolume = parsedData;
-                        } else if (key === 'currentMicVolume') {
-                            const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
-                            updates.currentMicVolume = parsedData;
-                        } else if (key === 'outputVolume') {
-                            const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
-                            updates.outputVolume = parsedData;
-                        } else if (key === 'cameraStatus') {
-                            const statusCode = typeof value === 'number' ? value : (Number(value) || -1);
-                            const status = mapStatusCodeToDeviceStatus(statusCode);
-                            if (status) {
-                                updates.cameraStatus = status;
-                            }
-                        } else if (key === 'cameraLastError') {
-                            const errorCode = typeof value === 'number' ? value : (Number(value) || -1);
-                            const error = mapErrorCodeToDeviceError(errorCode);
-                            if (error) {
-                                updates.cameraLastError = error;
-                            }
-                        } else if (key === 'isFrontCamera') {
-                            const parsedData = typeof value === 'boolean' ? value : Boolean(value);
-                            updates.isFrontCamera = parsedData;
-                        } else if (key === 'localMirrorType') {
-                            const parsedData = typeof value === 'number' ? value as MirrorType : (Number(value) as MirrorType);
-                            updates.localMirrorType = parsedData;
-                        } else if (key === 'localVideoQuality') {
-                            const payloadStr = typeof value === 'string' ? value : JSON.stringify(value);
-                            const parsedData = safeJsonParse<LocalVideoQuality>(payloadStr, {} as LocalVideoQuality);
-                            updates.localVideoQuality = parsedData;
-                        } else if (key === 'currentAudioRoute') {
-                            const payloadStr = typeof value === 'string' ? value : JSON.stringify(value);
-                            const parsedData = safeJsonParse<AudioOutputType>(payloadStr, AudioOutput.SPEAKERPHONE);
-                            updates.currentAudioRoute = parsedData;
-                        } else if (key === 'screenStatus') {
-                            const statusCode = typeof value === 'number' ? value : (Number(value) || -1);
-                            const status = mapStatusCodeToDeviceStatus(statusCode);
-                            if (status) {
-                                updates.screenStatus = status;
-                            }
-                        } else if (key === 'networkInfo') {
-                            const payloadStr = typeof value === 'string' ? value : JSON.stringify(value);
-                            const parsedData = safeJsonParse<NetworkInfo>(payloadStr, {} as NetworkInfo);
-                            updates.networkInfo = parsedData;
-                        }
-                    }
-                });
-
-                // Batch update global store (only update once to avoid multiple notifications)
-                if (Object.keys(updates).length > 0) {
-                    deviceStore.setState(updates);
-                }
-            }
-        } catch (error) {
-            console.error(`[DeviceState] ${eventName} event parse error:`, error);
-        }
-    }, []);
-
-    /**
-     * Bind event listeners
-     */
-    useEffect(() => {
-        const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-            return {
-                type: 'state',
-                store: 'DeviceStore',
-                name: eventName,
-                roomID: null,
-                listenerID: listenerID ?? null,
-            };
-        };
-        // Save references to listener cleanup functions
-        const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-        DEVICE_EVENTS.forEach((eventName) => {
-            const keyObject = createListenerKeyObject(eventName);
-            const key = JSON.stringify(keyObject);
-            // addListener automatically registers event listeners for both Native side and JS layer
-            const subscription = addListener(key, handleEvent(eventName));
-            if (subscription) {
-                cleanupFunctions.push(subscription);
-            }
-        });
-
-        return () => {
-            DEVICE_EVENTS.forEach((eventName) => {
-                const keyObject = createListenerKeyObject(eventName);
-                const key = JSON.stringify(keyObject);
-                removeListener(key);
-            });
-            // Also clean up JS layer subscriptions
-            cleanupFunctions.forEach((cleanup) => {
-                cleanup.remove();
-            });
-        };
-    }, [handleEvent]);
+    }, [listen]);
 
     /**
      * Request Android permissions
@@ -531,9 +503,9 @@ export function useDeviceState() {
      */
     const requestAndroidPermission = useCallback(async (
         permission: string | string[]
-    ): Promise<void> => {
+    ): Promise<boolean> => {
         if (Platform.OS !== 'android') {
-            return;
+            return true;
         }
 
         // Permission string to PermissionsAndroid.PERMISSIONS mapping
@@ -552,18 +524,20 @@ export function useDeviceState() {
 
         if (androidPermissions.length === 0) {
             console.warn('No valid Android permissions found');
-            return;
+            return false;
         }
 
         try {
             // Use request for single permission, requestMultiple for multiple permissions
             if (androidPermissions.length === 1) {
-                await PermissionsAndroid.request(androidPermissions[0] as any);
-            } else {
-                await PermissionsAndroid.requestMultiple(androidPermissions as any);
+                const result = await PermissionsAndroid.request(androidPermissions[0] as any);
+                return result === PermissionsAndroid.RESULTS.GRANTED;
             }
+            const results = await PermissionsAndroid.requestMultiple(androidPermissions as any);
+            return Object.values(results).every((result) => result === PermissionsAndroid.RESULTS.GRANTED);
         } catch (error) {
             console.error('Failed to request Android permissions:', error);
+            return false;
         }
     }, []);
 
@@ -580,12 +554,13 @@ export function useDeviceState() {
      * ```
      */
     const openLocalMicrophone = useCallback(async (params?: OpenLocalMicrophoneOptions): Promise<void> => {
-        // Request recording permission on Android platform
-        if (Platform.OS === 'android') {
-            await requestAndroidPermission('android.permission.RECORD_AUDIO');
-        }
-
         const { onSuccess, onError, ...microphoneParams } = params || {};
+
+        // Request recording permission on Android platform
+        if (Platform.OS === 'android' && !(await requestAndroidPermission('android.permission.RECORD_AUDIO'))) {
+            onError?.(new Error('Android permission denied: android.permission.RECORD_AUDIO'));
+            return;
+        }
 
         try {
             const result = await callNativeAPI<void>('openLocalMicrophone', microphoneParams);
@@ -594,7 +569,7 @@ export function useDeviceState() {
                 // Only trigger callback on success, state update is handled by event listener
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Open local microphone failed');
+                const error = createStateError(result, 'Open local microphone failed');
                 onError?.(error);
             }
         } catch (error: any) {
@@ -641,7 +616,7 @@ export function useDeviceState() {
             if (result.success) {
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Set capture volume failed');
+                const error = createStateError(result, 'Set capture volume failed');
                 onError?.(error);
             }
         } catch (error: any) {
@@ -672,7 +647,7 @@ export function useDeviceState() {
             if (result.success) {
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Set output volume failed');
+                const error = createStateError(result, 'Set output volume failed');
                 onError?.(error);
             }
         } catch (error: any) {
@@ -688,16 +663,16 @@ export function useDeviceState() {
      * @example
      * ```tsx
      * setAudioRoute({
-     *   route: 'SPEAKERPHONE',
+     *   audioRoute: 'SPEAKERPHONE',
      *   onSuccess: () => console.log('Audio route set successfully'),
      *   onError: (error) => console.error('Set audio route failed:', error)
      * });
      * ```
      */
     const setAudioRoute = useCallback(async (params: SetAudioRouteOptions): Promise<void> => {
-        const routeValue = AUDIO_ROUTE_STRING_MAP[params.route] ?? 0;
+        const routeValue = AUDIO_ROUTE_STRING_MAP[params.audioRoute] ?? 0;
         
-        const { onSuccess, onError, route, ...otherParams } = params;
+        const { onSuccess, onError, audioRoute, ...otherParams } = params;
         const routeParams = {
             ...otherParams,
             audioRoute: routeValue,
@@ -709,7 +684,7 @@ export function useDeviceState() {
             if (result.success) {
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Set audio route failed');
+                const error = createStateError(result, 'Set audio route failed');
                 onError?.(error);
             }
         } catch (error: any) {
@@ -732,12 +707,13 @@ export function useDeviceState() {
      * ```
      */
     const openLocalCamera = useCallback(async (params?: OpenLocalCameraOptions): Promise<void> => {
-        // Request camera permission on Android platform
-        if (Platform.OS === 'android') {
-            await requestAndroidPermission('android.permission.CAMERA');
-        }
-
         const { onSuccess, onError, ...cameraParams } = params || {};
+
+        // Request camera permission on Android platform
+        if (Platform.OS === 'android' && !(await requestAndroidPermission('android.permission.CAMERA'))) {
+            onError?.(new Error('Android permission denied: android.permission.CAMERA'));
+            return;
+        }
 
         try {
             const result = await callNativeAPI<void>('openLocalCamera', cameraParams);
@@ -746,7 +722,7 @@ export function useDeviceState() {
                 // Only trigger callback on success, state update is handled by event listener
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Open local camera failed');
+                const error = createStateError(result, 'Open local camera failed');
                 onError?.(error);
             }
         } catch (error: any) {
@@ -793,13 +769,42 @@ export function useDeviceState() {
             if (result.success) {
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Switch camera failed');
+                const error = createStateError(result, 'Switch camera failed');
                 onError?.(error);
             }
         } catch (error: any) {
             const err = error instanceof Error ? error : new Error(String(error));
             onError?.(err);
         }
+    }, []);
+
+    const startCameraTest = useCallback(async (params: StartCameraTestOptions): Promise<void> => {
+        const { onSuccess, onError, ...testParams } = params;
+
+        if (Platform.OS === 'android' && !(await requestAndroidPermission('android.permission.CAMERA'))) {
+            onError?.(new Error('Android permission denied: android.permission.CAMERA'));
+            return;
+        }
+
+        try {
+            const result = await callNativeAPI<void>('startCameraTest', testParams);
+
+            if (result.success) {
+                onSuccess?.();
+            } else {
+                const error = createStateError(result, 'Start camera test failed');
+                onError?.(error);
+            }
+        } catch (error: any) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            onError?.(err);
+        }
+    }, [requestAndroidPermission]);
+
+    const stopCameraTest = useCallback((): void => {
+        callNativeAPI<void>('stopCameraTest').catch((error) => {
+            console.error('stopCameraTest error:', error);
+        });
     }, []);
 
     /**
@@ -828,7 +833,7 @@ export function useDeviceState() {
             if (result.success) {
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Switch mirror failed');
+                const error = createStateError(result, 'Switch mirror failed');
                 onError?.(error);
             }
         } catch (error: any) {
@@ -867,7 +872,7 @@ export function useDeviceState() {
             if (result.success) {
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Update video quality failed');
+                const error = createStateError(result, 'Update video quality failed');
                 onError?.(error);
             }
         } catch (error: any) {
@@ -908,51 +913,6 @@ export function useDeviceState() {
         }
     }, []);
 
-    /**
-     * Add device event listener
-     *
-     * @param eventName - Event name
-     * @param listener - Event callback function
-     * @param listenerID - Listener ID (optional)
-     * @example
-     * ```tsx
-     * addDeviceListener('onDeviceStatusChanged', (params) => {
-     *   console.log('Device status changed:', params);
-     * });
-     * ```
-     */
-    const addDeviceListener = useCallback((eventName: string, listener: ILiveListener, listenerID?: string): void => {
-        const createListenerKeyObject: HybridListenerKey = {
-            type: 'state',
-            store: 'DeviceStore',
-            name: eventName,
-            roomID: null,
-            listenerID: listenerID ?? null,
-        };
-        addListener(JSON.stringify(createListenerKeyObject), listener);
-    }, []);
-
-    /**
-     * Remove device event listener
-     *
-     * @param eventName - Event name
-     * @param listenerID - Listener ID (optional)
-     * @example
-     * ```tsx
-     * removeDeviceListener('onDeviceStatusChanged');
-     * ```
-     */
-    const removeDeviceListener = useCallback((eventName: string, listenerID?: string): void => {
-        const createListenerKeyObject: HybridListenerKey = {
-            type: 'state',
-            store: 'DeviceStore',
-            name: eventName,
-            roomID: null,
-            listenerID: listenerID ?? null,
-        };
-        removeListener(JSON.stringify(createListenerKeyObject));
-    }, []);
-
     return {
         // Microphone-related state - read from global store
         microphoneStatus,
@@ -987,12 +947,60 @@ export function useDeviceState() {
         openLocalCamera,             // Open local camera
         closeLocalCamera,            // Close local camera
         switchCamera,                // Switch camera
+        startCameraTest,
+        stopCameraTest,
         switchMirror,                // Switch mirror
         updateVideoQuality,          // Update video quality
         startScreenShare,            // Start screen share
         stopScreenShare,             // Stop screen share
-        addDeviceListener,           // Add device event listener
-        removeDeviceListener,        // Remove device event listener
+    };
+}
+
+export function useDeviceState() {
+    return useDevice(true);
+}
+
+export function useDeviceActions() {
+    const {
+        openLocalMicrophone,
+        closeLocalMicrophone,
+        setCaptureVolume,
+        setOutputVolume,
+        setAudioRoute,
+        openLocalCamera,
+        closeLocalCamera,
+        switchCamera,
+        startCameraTest,
+        stopCameraTest,
+        switchMirror,
+        updateVideoQuality,
+        startScreenShare,
+        stopScreenShare,
+    } = useDevice(false);
+    return {
+        openLocalMicrophone,
+        closeLocalMicrophone,
+        setCaptureVolume,
+        setOutputVolume,
+        setAudioRoute,
+        openLocalCamera,
+        closeLocalCamera,
+        switchCamera,
+        startCameraTest,
+        stopCameraTest,
+        switchMirror,
+        updateVideoQuality,
+        startScreenShare,
+        stopScreenShare,
+    };
+}
+
+export function getDeviceState() {
+    const state = deviceStore.getState();
+    return {
+        microphoneStatus: state.microphoneStatus,
+        cameraStatus: state.cameraStatus,
+        isFrontCamera: state.isFrontCamera,
     };
 }
 

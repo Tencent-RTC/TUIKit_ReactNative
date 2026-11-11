@@ -9,9 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { callNativeAPI } from '../../utils';
-import { addListener, removeListener } from '../../bridge/HybridBridge';
-import type { HybridListenerKey } from '../../bridge/HybridBridge';
+import { callNativeAPI, createStateError } from '../../utils';
 import type {
   BarrageParam,
   SendTextMessageOptions,
@@ -19,11 +17,7 @@ import type {
   AppendLocalTipOptions,
 } from './types';
 import { barrageStore } from './store';
-
-/**
- * Barrage listener function type
- */
-type ILiveListener = (params?: unknown) => void;
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 
 /**
  * Barrage state event name constants
@@ -47,6 +41,61 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
     return defaultValue;
   }
 }
+
+type WritableMap = Record<string, unknown>;
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+  return (event: WritableMap) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          messageList?: BarrageParam[];
+          allowSendMessage?: boolean;
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (BARRAGE_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'messageList') {
+              let parsedData: BarrageParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as BarrageParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<BarrageParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<BarrageParam[]>(JSON.stringify(value), []);
+              }
+              updates.messageList = parsedData;
+            } else if (key === 'allowSendMessage') {
+              const parsedData = typeof value === 'boolean' ? value : Boolean(value);
+              updates.allowSendMessage = parsedData;
+            }
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          barrageStore.setState(liveID, updates);
+        }
+      }
+    } catch (error) {
+      console.error(`[BarrageState] ${eventName} event parse error:`, error, event);
+    }
+  };
+}
+
+const currentLiveBinding = createCurrentLiveBinding({
+  store: 'BarrageStore',
+  events: BARRAGE_EVENTS,
+  createHandler: createNativeEventHandler,
+  reset: (liveID) => barrageStore.resetState(liveID),
+});
 
 /**
  * BarrageState Hook
@@ -123,106 +172,10 @@ export function useBarrageState(liveID: string) {
     return unsubscribe;
   }, [liveID]);
 
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle barrage state change events
-   * Update global store, store will automatically notify all subscribers
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[BarrageState] ${eventName} event received:`, JSON.stringify(data));
-
-      // Check if data's keys match any values in BARRAGE_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const updates: {
-          messageList?: BarrageParam[];
-          allowSendMessage?: boolean;
-        } = {};
-
-        Object.keys(data).forEach((key) => {
-          if (BARRAGE_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'messageList') {
-              // messageList is array type
-              let parsedData: BarrageParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as BarrageParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<BarrageParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<BarrageParam[]>(JSON.stringify(value), []);
-              }
-              updates.messageList = parsedData;
-            } else if (key === 'allowSendMessage') {
-              const parsedData = typeof value === 'boolean' ? value : Boolean(value);
-              updates.allowSendMessage = parsedData;
-            }
-          }
-        });
-
-        // Batch update global store (only update once to avoid multiple notifications)
-        if (Object.keys(updates).length > 0) {
-          barrageStore.setState(liveID, updates);
-        }
-      }
-    } catch (error) {
-      console.error(`[BarrageState] ${eventName} event parse error:`, error);
-      console.log(`[BarrageState] ${eventName} event received (raw):`, event);
-    }
-  }, [liveID]);
-
-  /**
-   * Bind event listeners
-   */
   useEffect(() => {
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'BarrageStore',
-        name: eventName,
-        roomID: liveID ?? null,
-        listenerID: listenerID ?? null,
-      };
-    };
-    // Save listener cleanup function references
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    BARRAGE_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener will automatically register Native and JS layer event listeners
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[BarrageState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      BARRAGE_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent, liveID]);
+    currentLiveBinding.ensureWatchCurrentLive();
+    currentLiveBinding.bindEvent(liveID);
+  }, [liveID]);
 
   /**
    * Send text type barrage
@@ -255,7 +208,7 @@ export function useBarrageState(liveID: string) {
         // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Send text message failed');
+        const error = createStateError(result, 'Send text message failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -296,7 +249,7 @@ export function useBarrageState(liveID: string) {
         // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Send custom message failed');
+        const error = createStateError(result, 'Send custom message failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -337,7 +290,7 @@ export function useBarrageState(liveID: string) {
         // Only trigger callback on success, state update handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Append local tip failed');
+        const error = createStateError(result, 'Append local tip failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -346,59 +299,12 @@ export function useBarrageState(liveID: string) {
     }
   }, []);
 
-  /**
-   * Add barrage event listener
-   *
-   * @param eventName - Event name
-   * @param listener - Event callback function
-   * @param listenerID - Listener ID (optional)
-   * @example
-   * ```tsx
-   * addBarrageListener('onMessageReceived', (params) => {
-   *   console.log('Message received:', params);
-   * });
-   * ```
-   */
-  const addBarrageListener = useCallback((eventName: string, listener: ILiveListener, listenerID?: string): void => {
-    const createListenerKeyObject: HybridListenerKey = {
-      type: 'state',
-      store: 'BarrageStore',
-      name: eventName,
-      roomID: liveID ?? null,
-      listenerID: listenerID ?? null,
-    };
-    addListener(JSON.stringify(createListenerKeyObject), listener);
-  }, [liveID]);
-
-  /**
-   * Remove barrage event listener
-   *
-   * @param eventName - Event name
-   * @param listenerID - Listener ID (optional)
-   * @example
-   * ```tsx
-   * removeBarrageListener('onMessageReceived');
-   * ```
-   */
-  const removeBarrageListener = useCallback((eventName: string, listenerID?: string): void => {
-    const createListenerKeyObject: HybridListenerKey = {
-      type: 'state',
-      store: 'BarrageStore',
-      name: eventName,
-      roomID: liveID ?? null,
-      listenerID: listenerID ?? null,
-    };
-    removeListener(JSON.stringify(createListenerKeyObject));
-  }, [liveID]);
-
   return {
     messageList,          // Current room's barrage message list
     allowSendMessage,     // Whether sending messages is allowed
     sendTextMessage,      // Send text message method
     sendCustomMessage,    // Send custom message method
     appendLocalTip,       // Add local tip message method
-    addBarrageListener,   // Add barrage event listener
-    removeBarrageListener, // Remove barrage event listener
   };
 }
 

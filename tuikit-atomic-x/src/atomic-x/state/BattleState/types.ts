@@ -7,8 +7,14 @@
  */
 export interface SeatUserInfoParam {
   userID: string;
-  nickname?: string;
+  userName?: string;
   avatarURL?: string;
+  role?: number | string;
+  liveID?: string;
+  microphoneStatus?: number | string;
+  allowOpenMicrophone?: boolean;
+  cameraStatus?: number | string;
+  allowOpenCamera?: boolean;
   [key: string]: unknown;
 }
 

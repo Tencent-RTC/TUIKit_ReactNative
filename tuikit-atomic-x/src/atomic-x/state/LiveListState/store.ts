@@ -64,18 +64,6 @@ class LiveListStore {
         };
     }
 
-    /**
-     * 清空状态（例如在全局重置时使用）
-     */
-    clearState(): void {
-        this.state = {
-            liveList: [],
-            liveListCursor: '',
-            currentLive: null,
-        };
-        this.notifyListeners();
-    }
-
     private notifyListeners(): void {
         this.listeners.forEach((listener) => {
             try {

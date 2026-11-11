@@ -1,3 +1,5 @@
+import type { LiveUserInfoParam } from '../LiveAudienceState/types';
+
 /**
  * Barrage State 类型定义
  */
@@ -6,14 +8,15 @@
  * 弹幕参数
  */
 export interface BarrageParam {
-  content?: string;
-  text?: string;
-  sender?: string;
-  userID?: string;
-  nickname?: string;
-  avatarURL?: string;
-  timestamp?: number;
-  messageID?: string;
+  liveID: string;
+  sender: LiveUserInfoParam;
+  sequence: number;
+  timestampInSecond: number;
+  messageType: number | string;
+  textContent?: string;
+  extensionInfo?: Record<string, string>;
+  businessID?: string;
+  data?: string;
   [key: string]: unknown;
 }
 

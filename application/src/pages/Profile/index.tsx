@@ -19,10 +19,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     useLoginState,
-    showToast,
+    Toast,
     DEFAULT_AVATAR_URL,
     useTranslation,
-} from 'react-native-tuikit-atomic-x';
+} from '@tencentcloud/react-native-tuikit-atomic-x';
 
 export interface ProfilePageProps {
     onBack?: () => void;
@@ -63,6 +63,11 @@ export function ProfilePage({ onBack, onLogout }: ProfilePageProps) {
     const [selectedAvatarIndex, setSelectedAvatarIndex] = useState(0);
     const [newNickname, setNewNickname] = useState('');
     const [loading, setLoading] = useState(false);
+    const [toast, setToast] = useState<{ title: string; duration: number; seq: number } | null>(null);
+
+    const showToast = useCallback((title: string, duration: number) => {
+        setToast((prev) => ({ title, duration, seq: (prev?.seq ?? 0) + 1 }));
+    }, []);
 
     const userAvatar = loginUserInfo?.avatarURL || DEFAULT_AVATAR_URL;
     const userNickname = loginUserInfo?.nickname || loginUserInfo?.userID || t('profile.notSet');
@@ -116,7 +121,7 @@ export function ProfilePage({ onBack, onLogout }: ProfilePageProps) {
         } finally {
             setLoading(false);
         }
-    }, [newNickname, userID, loginUserInfo, setSelfInfo, t]);
+    }, [newNickname, userID, loginUserInfo, setSelfInfo, t, showToast]);
 
     const showEditAvatar = useCallback(() => {
         const currentAvatarIndex = AVATAR_LIST.findIndex(
@@ -154,7 +159,7 @@ export function ProfilePage({ onBack, onLogout }: ProfilePageProps) {
         } finally {
             setLoading(false);
         }
-    }, [selectedAvatarIndex, userID, loginUserInfo, setSelfInfo, t]);
+    }, [selectedAvatarIndex, userID, loginUserInfo, setSelfInfo, t, showToast]);
 
     const handleLogout = useCallback(() => {
         Alert.alert(
@@ -179,10 +184,20 @@ export function ProfilePage({ onBack, onLogout }: ProfilePageProps) {
                 },
             ],
         );
-    }, [logout, onLogout, t]);
+    }, [logout, onLogout, t, showToast]);
 
     const handleAvatarError = useCallback(() => {
     }, []);
+
+    const toastNode = toast ? (
+        <Toast
+            key={toast.seq}
+            visible
+            title={toast.title}
+            duration={toast.duration}
+            onClose={() => setToast(null)}
+        />
+    ) : null;
 
     return (
         <View
@@ -199,7 +214,7 @@ export function ProfilePage({ onBack, onLogout }: ProfilePageProps) {
                     onPress={onBack}
                     activeOpacity={0.7}>
                     <Image
-                        source={require('react-native-tuikit-atomic-x/src/static/images/back-black.png')}
+                        source={require('../../assets/back-black.png')}
                         style={styles.backIcon}
                         resizeMode="contain"
                     />
@@ -289,6 +304,7 @@ export function ProfilePage({ onBack, onLogout }: ProfilePageProps) {
                             </TouchableOpacity>
                         </View>
                     </View>
+                    {isEditingNickname && toastNode}
                 </View>
             </Modal>
 
@@ -346,8 +362,10 @@ export function ProfilePage({ onBack, onLogout }: ProfilePageProps) {
                             </TouchableOpacity>
                         </View>
                     </View>
+                    {isSelectingAvatar && toastNode}
                 </View>
             </Modal>
+            {!isEditingNickname && !isSelectingAvatar && toastNode}
         </View>
     );
 }

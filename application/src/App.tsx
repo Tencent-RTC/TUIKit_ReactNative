@@ -6,8 +6,8 @@
 import React, { useState } from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
-import { CustomToastContainer, i18n, I18nextProvider } from 'react-native-tuikit-atomic-x';
+import { i18n, I18nextProvider } from '@tencentcloud/react-native-tuikit-atomic-x';
+import { VideoLiveListPage, VideoPlayerPage, VideoPusherPage } from '@tencentcloud/react-native-tuikit-live';
 
 // Initialize i18n (side effect import)
 console.log('[App] i18n initialized, current language:', i18n.language);
@@ -17,157 +17,56 @@ import { LoginPage } from './pages/Login';
 import { HomePage } from './pages/Home';
 import { ProfilePage } from './pages/Profile';
 
-// Live Module Pages (from react-native-tuikit-live)
-import {
-  LiveHomePage,
-  LiveListPage,
-  LiveAudiencePage,
-  AnchorPage,
-  LiveEndPage,
-} from 'react-native-tuikit-live';
-
-type PageName =
-  | 'login'
-  | 'home'
-  | 'profile'
-  | 'liveHome'
-  | 'liveList'
-  | 'liveAudience'
-  | 'anchor'
-  | 'liveEnd';
+type Route =
+  | { name: 'login' }
+  | { name: 'home' }
+  | { name: 'profile' }
+  | { name: 'liveList' }
+  | { name: 'pusher'; liveID?: string }
+  | { name: 'player'; liveID: string };
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
-  const [currentPage, setCurrentPage] = useState<PageName>('login');
-  const [liveAudienceLiveID, setLiveAudienceLiveID] = useState<string>('');
-  const [anchorLiveID, setAnchorLiveID] = useState<string>('');
-  const [liveEndLiveID, setLiveEndLiveID] = useState<string>('');
+  const [route, setRoute] = useState<Route>({ name: 'login' });
 
-  // Navigation handlers
-  const handleLoginSuccess = () => {
-    setCurrentPage('home');
-  };
-
-  const handleLogout = () => {
-    setCurrentPage('login');
-  };
-
-  const handleNavigateToLive = () => {
-    setCurrentPage('liveHome');
-  };
-
-  const handleNavigateToProfile = () => {
-    setCurrentPage('profile');
-  };
-
-  const handleBackToHome = () => {
-    setCurrentPage('home');
-  };
-
-  const handleJumpToList = () => {
-    setCurrentPage('liveList');
-  };
-
-  const handleBackToLiveHome = () => {
-    setCurrentPage('liveHome');
-  };
-
-  const handleJumpToLiveAudience = (liveID: string) => {
-    setLiveAudienceLiveID(liveID);
-    setCurrentPage('liveAudience');
-  };
-
-  const handleBackFromLiveAudience = () => {
-    setCurrentPage('liveList');
-  };
-
-  const handleJoinAsAnchor = (liveID: string) => {
-    setAnchorLiveID(liveID);
-    setCurrentPage('anchor');
-  };
-
-  const handleCreateLive = () => {
-    setCurrentPage('anchor');
-  };
-
-  const handleBackFromAnchor = () => {
-    setCurrentPage('liveList');
-  };
-
-  const handleEndLive = (liveID?: string) => {
-    setLiveEndLiveID(liveID || '');
-    setCurrentPage('liveEnd');
-  };
-
-  const handleBackFromLiveEnd = () => {
-    setCurrentPage('liveList');
-  };
+  const goHome = () => setRoute({ name: 'home' });
+  const goLiveList = () => setRoute({ name: 'liveList' });
 
   const renderPage = () => {
-    switch (currentPage) {
-      case 'login':
-        return <LoginPage onLoginSuccess={handleLoginSuccess} />;
-
+    switch (route.name) {
       case 'home':
         return (
           <HomePage
-            onNavigateToLive={handleNavigateToLive}
-            onNavigateToProfile={handleNavigateToProfile}
+            onNavigateToLive={goLiveList}
+            onNavigateToProfile={() => setRoute({ name: 'profile' })}
           />
         );
 
       case 'profile':
         return (
           <ProfilePage
-            onBack={handleBackToHome}
-            onLogout={handleLogout}
-          />
-        );
-
-      case 'liveHome':
-        return (
-          <LiveHomePage
-            onJumpToList={handleJumpToList}
-            onBack={handleBackToHome}
+            onBack={goHome}
+            onLogout={() => setRoute({ name: 'login' })}
           />
         );
 
       case 'liveList':
         return (
-          <LiveListPage
-            onBack={handleBackToLiveHome}
-            onJoinSuccess={handleJumpToLiveAudience}
-            onJoinAsAnchor={handleJoinAsAnchor}
-            onCreateLive={handleCreateLive}
+          <VideoLiveListPage
+            onBack={goHome}
+            onEnterPlayer={(liveID) => setRoute({ name: 'player', liveID })}
+            onEnterPusher={(liveID) => setRoute({ name: 'pusher', liveID })}
           />
         );
 
-      case 'liveAudience':
-        return (
-          <LiveAudiencePage
-            liveID={liveAudienceLiveID}
-            onBack={handleBackFromLiveAudience}
-          />
-        );
+      case 'pusher':
+        return <VideoPusherPage liveID={route.liveID} onExit={goLiveList} />;
 
-      case 'anchor':
-        return (
-          <AnchorPage
-            onBack={handleBackFromAnchor}
-            onEndLive={handleEndLive}
-          />
-        );
-
-      case 'liveEnd':
-        return (
-          <LiveEndPage
-            liveID={liveEndLiveID}
-            onBack={handleBackFromLiveEnd}
-          />
-        );
+      case 'player':
+        return <VideoPlayerPage liveID={route.liveID} onExit={goLiveList} />;
 
       default:
-        return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+        return <LoginPage onLoginSuccess={goHome} />;
     }
   };
 
@@ -180,8 +79,6 @@ function App() {
           translucent
         />
         {renderPage()}
-        <Toast />
-        <CustomToastContainer />
       </SafeAreaProvider>
     </I18nextProvider>
   );

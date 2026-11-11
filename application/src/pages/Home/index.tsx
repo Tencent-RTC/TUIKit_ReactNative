@@ -12,7 +12,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLoginState, DEFAULT_AVATAR_URL, useTranslation } from 'react-native-tuikit-atomic-x';
+import { useLoginState, DEFAULT_AVATAR_URL, useTranslation } from '@tencentcloud/react-native-tuikit-atomic-x';
 
 export interface HomePageProps {
   onNavigateToLive?: () => void;
@@ -36,7 +36,7 @@ export function HomePage({
       <View style={[styles.header, { marginTop: safeAreaInsets.top }]}>
         <View style={styles.headerLeft}>
           <Image
-            source={require('react-native-tuikit-atomic-x/src/static/images/tencent-rtc-logo.png')}
+            source={require('../../assets/tencent-rtc-logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -61,7 +61,7 @@ export function HomePage({
           activeOpacity={0.8}>
           <View style={styles.cardHeader}>
             <Image
-              source={require('react-native-tuikit-atomic-x/src/static/images/live.png')}
+              source={require('../../assets/live.png')}
               style={styles.cardIcon}
               resizeMode="contain"
             />

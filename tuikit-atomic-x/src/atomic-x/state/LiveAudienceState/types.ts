@@ -7,9 +7,9 @@
  */
 export interface LiveUserInfoParam {
   userID: string;
-  nickname?: string;
+  userName?: string;
   avatarURL?: string;
-  role?: string;
+  level?: number;
   [key: string]: unknown;
 }
 

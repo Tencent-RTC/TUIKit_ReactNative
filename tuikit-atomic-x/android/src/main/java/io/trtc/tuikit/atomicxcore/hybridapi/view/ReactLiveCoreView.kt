@@ -35,6 +35,7 @@ class ReactLiveCoreView(context: Context) : ReactFrameLayout(context) {
     private var liveId: String = ""
     private var round: Float = 12.dpToPx(context)
     private var liveCoreView: LiveCoreView? = null
+    private var viewType: CoreViewType? = null
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     init {
@@ -49,15 +50,24 @@ class ReactLiveCoreView(context: Context) : ReactFrameLayout(context) {
     }
 
     fun setCoreViewType(coreViewType: String?) {
-        val viewType = parseViewType(coreViewType)
-        val view = LiveCoreView(context, null, 0, viewType)
-        liveCoreView = view
-        addView(view)
-        view.setLiveId(liveId)
+        viewType = parseViewType(coreViewType)
+        updateRenderView()
     }
 
     fun setLiveId(liveId: String?) {
         this.liveId = liveId ?: ""
+        updateRenderView()
+    }
+
+    // Fabric does not guarantee prop order; coreViewType can arrive before liveId.
+    private fun updateRenderView() {
+        val type = viewType ?: return
+        if (liveId.isEmpty()) return
+        removeAllViews()
+        val view = LiveCoreView(context, null, 0, type)
+        liveCoreView = view
+        addView(view)
+        view.setLiveID(liveId)
     }
 
     fun setRound(radius: Int) {

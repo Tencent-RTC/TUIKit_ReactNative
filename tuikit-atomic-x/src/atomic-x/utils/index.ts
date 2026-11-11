@@ -4,7 +4,7 @@
 
 import { callAPI } from '../bridge/HybridBridge';
 import type { HybridRequest, HybridResponse } from '../bridge/HybridBridge';
-import type { BaseResponse, StateResult, StateOptions } from '../types';
+import type { BaseResponse, StateResult, StateOptions, StateError } from '../types';
 
 export { startForegroundService, stopForegroundService } from './foregroundService';
 
@@ -120,3 +120,8 @@ export function validateRequired(
     return { valid: true };
 }
 
+export function createStateError(result: StateResult<unknown>, fallback: string): StateError {
+    const error: StateError = new Error(result.error || fallback);
+    error.code = result.code;
+    return error;
+}

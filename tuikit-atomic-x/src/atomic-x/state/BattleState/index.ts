@@ -8,8 +8,8 @@
  * Application Scenarios: Streamer battle, battle live streaming, score statistics, interactive games, and other entertainment interaction scenarios.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { callNativeAPI } from '../../utils';
+import { useState, useEffect, useCallback } from 'react';
+import { callNativeAPI, createStateError } from '../../utils';
 import { addListener, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
@@ -22,6 +22,7 @@ import type {
   ExitBattleOptions,
 } from './types';
 import { battleStore } from './store';
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 
 /**
  * Battle listener function type
@@ -87,6 +88,83 @@ function parseMapFromJson(json: string): Map<string, number> | null {
     return null;
   }
 }
+
+type WritableMap = Record<string, unknown>;
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+  return (event: WritableMap) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          currentBattleInfo?: BattleInfoParam | null;
+          battleUsers?: SeatUserInfoParam[];
+          battleScore?: Map<string, number> | null;
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (BATTLE_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'currentBattleInfo') {
+              let parsedData: BattleInfoParam | null;
+              if (value === null || value === undefined) {
+                parsedData = null;
+              } else if (typeof value === 'object') {
+                parsedData = value as BattleInfoParam;
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<BattleInfoParam | null>(value, null);
+              } else {
+                parsedData = safeJsonParse<BattleInfoParam | null>(JSON.stringify(value), null);
+              }
+              updates.currentBattleInfo = parsedData;
+            } else if (key === 'battleUsers') {
+              let parsedData: SeatUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as SeatUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<SeatUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<SeatUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.battleUsers = parsedData;
+            } else if (key === 'battleScore') {
+              let parsedData: Map<string, number> | null;
+              if (value === null || value === undefined) {
+                parsedData = null;
+              } else if (value instanceof Map) {
+                parsedData = value;
+              } else if (typeof value === 'string') {
+                parsedData = parseMapFromJson(value);
+              } else {
+                parsedData = parseMapFromJson(JSON.stringify(value));
+              }
+              updates.battleScore = parsedData;
+            }
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          battleStore.setState(liveID, updates);
+        }
+      }
+    } catch (error) {
+      console.error(`[BattleState] ${eventName} event parse error:`, error, event);
+    }
+  };
+}
+
+const currentLiveBinding = createCurrentLiveBinding({
+  store: 'BattleStore',
+  events: BATTLE_EVENTS,
+  createHandler: createNativeEventHandler,
+  reset: (liveID) => battleStore.resetState(liveID),
+});
 
 /**
  * BattleState Hook
@@ -169,135 +247,10 @@ export function useBattleState(liveID: string) {
     return unsubscribe;
   }, [liveID]);
 
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle battle state change events
-   * Update global store, store will automatically notify all subscribers
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[BattleState] ${eventName} event received:`, JSON.stringify(data));
-
-      // Check if data's keys match any values in BATTLE_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const updates: {
-          currentBattleInfo?: BattleInfoParam | null;
-          battleUsers?: SeatUserInfoParam[];
-          battleScore?: Map<string, number> | null;
-        } = {};
-
-        Object.keys(data).forEach((key) => {
-          if (BATTLE_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'currentBattleInfo') {
-              // currentBattleInfo can be object or null
-              let parsedData: BattleInfoParam | null;
-              if (value === null || value === undefined) {
-                parsedData = null;
-              } else if (typeof value === 'object') {
-                parsedData = value as BattleInfoParam;
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<BattleInfoParam | null>(value, null);
-              } else {
-                parsedData = safeJsonParse<BattleInfoParam | null>(JSON.stringify(value), null);
-              }
-              updates.currentBattleInfo = parsedData;
-            } else if (key === 'battleUsers') {
-              // battleUsers is array type
-              let parsedData: SeatUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as SeatUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<SeatUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<SeatUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.battleUsers = parsedData;
-            } else if (key === 'battleScore') {
-              // battleScore needs special parsing to Map
-              let parsedData: Map<string, number> | null;
-              if (value === null || value === undefined) {
-                parsedData = null;
-              } else if (value instanceof Map) {
-                parsedData = value;
-              } else if (typeof value === 'string') {
-                parsedData = parseMapFromJson(value);
-              } else {
-                parsedData = parseMapFromJson(JSON.stringify(value));
-              }
-              updates.battleScore = parsedData;
-            }
-          }
-        });
-
-        // Batch update global store (only update once to avoid multiple notifications)
-        if (Object.keys(updates).length > 0) {
-          battleStore.setState(liveID, updates);
-        }
-      }
-    } catch (error) {
-      console.error(`[BattleState] ${eventName} event parse error:`, error);
-      console.log(`[BattleState] ${eventName} event received (raw):`, event);
-    }
-  }, [liveID]);
-
-  /**
-   * Bind event listeners
-   */
   useEffect(() => {
-    if (!liveID) {
-      return;
-    }
-
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'BattleStore',
-        name: eventName,
-        roomID: liveID ?? null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // Save listener cleanup function references
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    BATTLE_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener will automatically register Native and JS layer event listeners
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[BattleState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      BATTLE_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent, liveID]);
+    currentLiveBinding.ensureWatchCurrentLive();
+    currentLiveBinding.bindEvent(liveID);
+  }, [liveID]);
 
   /**
    * Request battle
@@ -335,7 +288,7 @@ export function useBattleState(liveID: string) {
         // Trigger callback on success, state update handled by event listener
         onSuccess?.(result.data, result.data);
       } else {
-        const error = new Error(result.error || 'Request battle failed');
+        const error = createStateError(result, 'Request battle failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -375,7 +328,7 @@ export function useBattleState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Cancel battle request failed');
+        const error = createStateError(result, 'Cancel battle request failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -414,7 +367,7 @@ export function useBattleState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Accept battle failed');
+        const error = createStateError(result, 'Accept battle failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -453,7 +406,7 @@ export function useBattleState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Reject battle failed');
+        const error = createStateError(result, 'Reject battle failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -492,7 +445,7 @@ export function useBattleState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Exit battle failed');
+        const error = createStateError(result, 'Exit battle failed');
         onError?.(error);
       }
     } catch (error: any) {

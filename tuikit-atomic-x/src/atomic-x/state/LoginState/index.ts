@@ -9,8 +9,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { callNativeAPI } from '../../utils';
-import { addListener, removeListener } from '../../bridge/HybridBridge';
+import { callNativeAPI, createStateError } from '../../utils';
+import { addListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
   UserProfileParam,
@@ -21,11 +21,6 @@ import type {
 } from './types';
 import { validateRequired } from '../../utils';
 import { loginStore } from './store';
-
-/**
- * Login listener function type
- */
-type ILiveListener = (params?: unknown) => void;
 
 /**
  * Login state event name constants
@@ -49,6 +44,73 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
     return defaultValue;
   }
 }
+
+/**
+ * Handle login state change events (module-level, shared by all hook instances)
+ */
+function handleNativeEvent(eventName: string) {
+  return (event: Record<string, unknown>) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        Object.keys(data).forEach((key) => {
+          if (LOGIN_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'loginUserInfo') {
+              let parsedData: UserProfileParam;
+              if (value && typeof value === 'object' && !Array.isArray(value)) {
+                parsedData = value as UserProfileParam;
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<UserProfileParam>(value, {} as UserProfileParam);
+              } else {
+                parsedData = safeJsonParse<UserProfileParam>(JSON.stringify(value), {} as UserProfileParam);
+              }
+              if (parsedData?.userID) {
+                loginStore.setState({
+                  loginUserInfo: parsedData,
+                  loginStatus: 'LOGINED',
+                });
+              }
+            } else if (key === 'loginStatus') {
+              let parsedData: LoginStatus;
+              if (typeof value === 'string') {
+                parsedData = value as LoginStatus;
+              } else {
+                parsedData = safeJsonParse<LoginStatus>(JSON.stringify(value), 'UNLOGIN');
+              }
+              loginStore.setState({
+                loginStatus: parsedData,
+              });
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error(`[LoginState] ${eventName} event parse error:`, error);
+    }
+  };
+}
+
+/**
+ * Register Native event listeners at module load time (once, never removed)
+ */
+LOGIN_EVENTS.forEach((eventName) => {
+  const keyObject: HybridListenerKey = {
+    type: 'state',
+    store: 'LoginStore',
+    name: eventName,
+    roomID: null,
+    listenerID: null,
+  };
+  const key = JSON.stringify(keyObject);
+  addListener(key, handleNativeEvent(eventName));
+});
 
 /**
  * LoginState Hook
@@ -124,72 +186,6 @@ export function useLoginState() {
    */
   const [loginStatus, setLoginStatus] = useState<LoginStatus>(initialState.loginStatus);
 
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle login state change events
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[LoginState] ${eventName} event received:`, JSON.stringify(data));
-
-      // Check if data key matches any value in LOGIN_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        Object.keys(data).forEach((key) => {
-          if (LOGIN_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'loginUserInfo') {
-              // loginUserInfo is an object type
-              let parsedData: UserProfileParam;
-              if (value && typeof value === 'object' && !Array.isArray(value)) {
-                parsedData = value as UserProfileParam;
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<UserProfileParam>(value, {} as UserProfileParam);
-              } else {
-                parsedData = safeJsonParse<UserProfileParam>(JSON.stringify(value), {} as UserProfileParam);
-              }
-              if (parsedData?.userID) {
-                // Update global store, which drives all hook instances uniformly
-                loginStore.setState({
-                  loginUserInfo: parsedData,
-                  loginStatus: 'LOGINED',
-                });
-              }
-            } else if (key === 'loginStatus') {
-              // loginStatus is a string type
-              let parsedData: LoginStatus;
-              if (typeof value === 'string') {
-                parsedData = value as LoginStatus;
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LoginStatus>(value, 'UNLOGIN');
-              } else {
-                parsedData = safeJsonParse<LoginStatus>(JSON.stringify(value), 'UNLOGIN');
-              }
-              // Update global store, which drives all hook instances uniformly
-              loginStore.setState({
-                loginStatus: parsedData,
-                // If Native sends loginUserInfo at the same time, it can be overwritten in the next event; don't clear it actively here
-              });
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error(`[LoginState] ${eventName} event parse error:`, error);
-      console.log(`[LoginState] ${eventName} event received (raw):`, event);
-    }
-  }, []);
-
   /**
    * Subscribe to global loginStore changes to drive local state
    * Ensures multiple components share the same login state
@@ -201,49 +197,6 @@ export function useLoginState() {
     });
     return unsubscribe;
   }, []);
-
-  /**
-   * Bind event listeners
-   */
-  useEffect(() => {
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'LoginStore',
-        name: eventName,
-        roomID: null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // Save references to listener cleanup functions
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    LOGIN_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener will automatically register event listeners on both Native and JS layers
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[LoginState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      LOGIN_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent]);
 
   /**
    * Login method
@@ -280,7 +233,7 @@ export function useLoginState() {
         // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Login failed');
+        const error = createStateError(result, 'Login failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -312,7 +265,7 @@ export function useLoginState() {
         // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Logout failed');
+        const error = createStateError(result, 'Logout failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -357,7 +310,7 @@ export function useLoginState() {
         // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Set self info failed');
+        const error = createStateError(result, 'Set self info failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -383,53 +336,6 @@ export function useLoginState() {
     return loginUserInfo;
   }, [loginUserInfo]);
 
-  /**
-   * Add login event listener
-   *
-   * @memberof module:LoginState
-   * @param {string} eventName - Event name
-   * @param {Function} listener - Event callback function
-   * @param {string} listenerID - Listener ID (optional)
-   * @example
-   * ```tsx
-   * addLoginListener('onLoginStatusChanged', (params) => {
-   *   console.log('Login status changed:', params);
-   * });
-   * ```
-   */
-  const addLoginListener = useCallback((eventName: string, listener: ILiveListener, listenerID?: string): void => {
-    const createListenerKeyObject: HybridListenerKey = {
-      type: 'state',
-      store: 'LoginStore',
-      name: eventName,
-      roomID: null,
-      listenerID: listenerID ?? null,
-    };
-    addListener(JSON.stringify(createListenerKeyObject), listener);
-  }, []);
-
-  /**
-   * Remove login event listener
-   *
-   * @memberof module:LoginState
-   * @param {string} eventName - Event name
-   * @param {string} listenerID - Listener ID (optional)
-   * @example
-   * ```tsx
-   * removeLoginListener('onLoginStatusChanged');
-   * ```
-   */
-  const removeLoginListener = useCallback((eventName: string, listenerID?: string): void => {
-    const createListenerKeyObject: HybridListenerKey = {
-      type: 'state',
-      store: 'LoginStore',
-      name: eventName,
-      roomID: null,
-      listenerID: listenerID ?? null,
-    };
-    removeListener(JSON.stringify(createListenerKeyObject));
-  }, []);
-
   return {
     loginUserInfo,      // Current login user information
     loginStatus,        // Current login status
@@ -437,8 +343,6 @@ export function useLoginState() {
     logout,             // Logout method
     setSelfInfo,        // Set user information
     getLoginUserInfo,   // Get login user information
-    addLoginListener,   // Add login event listener
-    removeLoginListener, // Remove login event listener
   };
 }
 

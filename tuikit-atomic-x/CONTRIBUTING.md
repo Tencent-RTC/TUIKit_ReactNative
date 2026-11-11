@@ -25,9 +25,9 @@ The [example app](/live/) demonstrates usage of the library. You need to run it 
 
 It is configured to use the local version of the library, so any changes you make to the library's source code will be reflected in the example app. Changes to the library's JavaScript code will be reflected in the example app without a rebuild, but native code changes will require a rebuild of the example app.
 
-If you want to use Android Studio or Xcode to edit the native code, you can open the `live/android` or `live/ios` directories respectively in those editors. To edit the Objective-C or Swift files, open `live/ios/TuikitAtomicXExample.xcworkspace` in Xcode and find the source files at `Pods > Development Pods > react-native-tuikit-atomic-x`.
+If you want to use Android Studio or Xcode to edit the native code, you can open the `live/android` or `live/ios` directories respectively in those editors. To edit the Objective-C or Swift files, open `live/ios/TuikitAtomicXExample.xcworkspace` in Xcode and find the source files at `Pods > Development Pods > @tencentcloud/react-native-tuikit-atomic-x`.
 
-To edit the Java or Kotlin files, open `live/android` in Android studio and find the source files at `react-native-tuikit-atomic-x` under `Android`.
+To edit the Java or Kotlin files, open `live/android` in Android studio and find the source files at `@tencentcloud/react-native-tuikit-atomic-x` under `Android`.
 
 You can use various commands from the root directory to work with the project.
 

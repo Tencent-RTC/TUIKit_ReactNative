@@ -2,7 +2,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "react-native-tuikit-atomic-x": ["./src/index"]
+      "@tencentcloud/react-native-tuikit-atomic-x": ["./src/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,

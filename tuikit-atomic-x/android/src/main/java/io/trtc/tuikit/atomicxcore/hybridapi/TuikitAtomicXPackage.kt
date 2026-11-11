@@ -8,7 +8,9 @@ import com.facebook.react.module.model.ReactModuleInfoProvider
 import com.facebook.react.uimanager.ViewManager
 import io.trtc.tuikit.atomicxcore.hybridapi.proxy.ForegroundServiceModule
 import io.trtc.tuikit.atomicxcore.hybridapi.proxy.HybridBridgeProxyModule
+import io.trtc.tuikit.atomicxcore.hybridapi.proxy.PermissionModule
 import io.trtc.tuikit.atomicxcore.hybridapi.view.LiveCoreViewManager
+import io.trtc.tuikit.atomicxcore.hybridapi.view.ReactCameraTestViewManager
 import io.trtc.tuikit.atomicxcore.hybridapi.view.SVGAAnimationViewManager
 import java.util.HashMap
 
@@ -18,6 +20,7 @@ class TuikitAtomicXPackage : BaseReactPackage() {
       TuikitAtomicXModule.NAME -> TuikitAtomicXModule(reactContext)
       HybridBridgeProxyModule.NAME -> HybridBridgeProxyModule(reactContext)
       ForegroundServiceModule.NAME -> ForegroundServiceModule(reactContext)
+      PermissionModule.NAME -> PermissionModule(reactContext)
       else -> null
     }
   }
@@ -25,7 +28,8 @@ class TuikitAtomicXPackage : BaseReactPackage() {
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
     return listOf(
       LiveCoreViewManager(),
-      SVGAAnimationViewManager()
+      SVGAAnimationViewManager(),
+      ReactCameraTestViewManager()
     )
   }
 
@@ -55,6 +59,14 @@ class TuikitAtomicXPackage : BaseReactPackage() {
         false,  // needsEagerInit
         false,  // isCxxModule
         false // isTurboModule (ForegroundServiceModule is not a TurboModule)
+      )
+      moduleInfos[PermissionModule.NAME] = ReactModuleInfo(
+        PermissionModule.NAME,
+        PermissionModule.NAME,
+        false,
+        false,
+        false,
+        false
       )
       moduleInfos
     }

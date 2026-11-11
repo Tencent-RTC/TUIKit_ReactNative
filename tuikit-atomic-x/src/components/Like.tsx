@@ -1,376 +1,394 @@
-/**
- * Like Component
- * 点赞组件 - 支持点赞动画和批量发送
- * 
- * @format
- */
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    TouchableOpacity,
-    Image,
-    StyleSheet,
-    View,
-    Animated,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Animated,
+  Easing,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Vibration,
+  View,
 } from 'react-native';
-import { useLikeState } from '../atomic-x/state/LikeState';
-import { useLoginState } from '../atomic-x/state/LoginState';
+import type { ImageSourcePropType } from 'react-native';
+import { useLikeState, useLiveListState, useLoginState } from '../atomic-x';
+import { rpxToPx } from './Common';
 
-interface LikeProps {
-    liveID: string;
-    role?: 'anchor' | 'audience';
-    maxConcurrent?: number;
+export type LikeRole = 'anchor' | 'audience';
+
+export interface LikeProps {
+  role?: LikeRole;
+  maxConcurrent?: number;
+  enableHaptics?: boolean;
 }
 
-interface LikeAnimation {
-    id: number;
-    translateY: Animated.Value;
-    opacity: Animated.Value;
-    scale: Animated.Value;
-    left: number;
-    imageIndex: number;
+export interface LikeRef {
+  triggerLike: () => void;
 }
 
-// 心形图片数组
-const heartImages = [
-    require('../static/images/gift_heart0.png'),
-    require('../static/images/gift_heart1.png'),
-    require('../static/images/gift_heart2.png'),
-    require('../static/images/gift_heart3.png'),
-    require('../static/images/gift_heart4.png'),
-    require('../static/images/gift_heart5.png'),
-    require('../static/images/gift_heart6.png'),
-    require('../static/images/gift_heart7.png'),
-    require('../static/images/gift_heart8.png'),
+interface FloatItem {
+  id: number;
+  icon: ImageSourcePropType;
+  startX: number;
+  progress: Animated.Value;
+  translateX: Animated.AnimatedInterpolation<number>;
+  translateY: Animated.AnimatedInterpolation<number>;
+  scale: Animated.AnimatedInterpolation<number>;
+  opacity: Animated.AnimatedInterpolation<number>;
+}
+
+const LIKE_ICON = require('../static/assets/live/live-like.png');
+const REACTION_ICONS: ImageSourcePropType[] = [
+  require('../static/assets/live/reaction-thumb.png'),
+  require('../static/assets/live/reaction-heart.png'),
+  require('../static/assets/live/reaction-double-heart.png'),
+  require('../static/assets/live/reaction-fire.png'),
+  require('../static/assets/live/reaction-sparkle.png'),
 ];
 
-const CLICK_INTERVAL = 100; // 点击间隔时间（毫秒）
-const BATCH_DELAY = 6000; // 6秒批量发送延迟
-const FIXED_ANIMATION_COUNT = 3; // 固定创建3个动画
+const BTN_ANIM_DURATION = 120;
+const BTN_ANIM_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
+const BTN_PRESSED_SCALE = 0.92;
+const MIN_PRESS_VISIBLE_MS = 120;
 
-export function Like({
-    liveID,
-    role = 'audience',
-    maxConcurrent = 20,
-}: LikeProps) {
-    const { sendLike, addLikeListener, removeLikeListener } = useLikeState(liveID);
-    const { loginUserInfo } = useLoginState();
+const STAGE_1 = 0.125;
+const STAGE_2 = 0.4225;
+const STAGE_3 = 0.7025;
+const STAGE_4 = 0.8075;
+const STAGE_1_SAMPLES = 8;
+const RISE_Y = -100;
+const LAYER_W = 380;
+const LAYER_H = 520;
+const BTN_CENTER_FROM_RIGHT = 156;
+const BTN_SIZE = 72;
+const BTN_MARGIN_LEFT = 16;
+const FLOAT_SIZE = 80;
 
-    const [likeAnimations, setLikeAnimations] = useState<LikeAnimation[]>([]);
-    const likeAnimationIdRef = useRef(0);
-    const lastClickTimeRef = useRef(0);
-    const pendingLikeCountRef = useRef(0);
-    const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastSendTimeRef = useRef(0);
-    const isFirstClickRef = useRef(true);
+const SPAWN_THROTTLE = 80;
+const BATCH_DELAY = 6000;
+const ANDROID_LIGHT_VIBRATE_MS = 15;
 
-    // 随机选择心形图片索引
-    const getRandomHeartImageIndex = useCallback(() => {
-        return Math.floor(Math.random() * heartImages.length);
-    }, []);
+const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
 
-    // 创建点赞动画
-    const createLikeAnimation = useCallback((_count: number = FIXED_ANIMATION_COUNT) => {
-        const actualCount = Math.min(FIXED_ANIMATION_COUNT, maxConcurrent);
+function createFloat(id: number): { item: FloatItem; duration: number } {
+  const startX = LAYER_W - BTN_CENTER_FROM_RIGHT + (Math.random() * 20 - 10);
+  const rise2 = 100 + Math.random() * 60;
+  const p1x = -(8 + Math.random() * 4);
+  const p1y = RISE_Y - rise2 * 0.34;
+  const p2x = -(2 + Math.random() * 4);
+  const p2y = RISE_Y - rise2 * 0.66;
+  const p3x = -(10 + Math.random() * 4);
+  const p3y = RISE_Y - rise2 * 0.78;
+  const p4x = -(6 + Math.random() * 4);
+  const p4y = RISE_Y - rise2;
+  const duration = 1500 + Math.round(Math.random() * 200);
+  const icon =
+    REACTION_ICONS[Math.floor(Math.random() * REACTION_ICONS.length)]!;
 
-        const newAnimations: LikeAnimation[] = [];
+  const stage1Input: number[] = [];
+  const stage1Y: number[] = [];
+  const stage1Scale: number[] = [];
+  for (let i = 0; i <= STAGE_1_SAMPLES; i++) {
+    const t = i / STAGE_1_SAMPLES;
+    const k = easeOutCubic(t);
+    stage1Input.push(t * STAGE_1);
+    stage1Y.push(RISE_Y * k);
+    stage1Scale.push(0.2 + 0.8 * k);
+  }
+  const inputRange = [...stage1Input, STAGE_2, STAGE_3, STAGE_4, 1];
+  const stage1Zeros = stage1Input.map(() => 0);
+  const stage1Ones = stage1Input.map(() => 1);
+  const toPx = (values: number[]) => values.map(rpxToPx);
 
-        for (let i = 0; i < actualCount; i++) {
-            const id = ++likeAnimationIdRef.current;
-            const translateY = new Animated.Value(0);
-            const opacity = new Animated.Value(1);
-            const scale = new Animated.Value(0.8);
+  const progress = new Animated.Value(0);
+  const interpolate = (outputRange: number[]) =>
+    progress.interpolate({ inputRange, outputRange, extrapolate: 'clamp' });
 
-            const newLike: LikeAnimation = {
-                id,
-                translateY,
-                opacity,
-                scale,
-                left: Math.random() * 120 + 40, // 随机水平位置
-                imageIndex: getRandomHeartImageIndex(),
-            };
-
-            newAnimations.push(newLike);
-
-            // 延迟启动动画，避免同时出现
-            setTimeout(() => {
-                // 动画序列：向上移动并逐渐消失
-                Animated.parallel([
-                    Animated.sequence([
-                        Animated.timing(translateY, {
-                            toValue: -200,
-                            duration: 1200,
-                            useNativeDriver: true,
-                        }),
-                    ]),
-                    Animated.sequence([
-                        Animated.timing(opacity, {
-                            toValue: 0,
-                            duration: 1200,
-                            useNativeDriver: true,
-                        }),
-                    ]),
-                    Animated.sequence([
-                        Animated.timing(scale, {
-                            toValue: 1.2,
-                            duration: 200,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(scale, {
-                            toValue: 0.5,
-                            duration: 1000,
-                            useNativeDriver: true,
-                        }),
-                    ]),
-                ]).start(() => {
-                    // 动画结束后移除
-                    setLikeAnimations((prev) => prev.filter((item) => item.id !== id));
-                });
-            }, i * 100);
-        }
-
-        // 控制最大并发，如果超过限制则移除最旧的
-        setLikeAnimations((prev) => {
-            const combined = [...prev, ...newAnimations];
-            if (combined.length > maxConcurrent) {
-                return combined.slice(-maxConcurrent);
-            }
-            return combined;
-        });
-    }, [maxConcurrent, getRandomHeartImageIndex]);
-
-    // 批量发送点赞
-    const sendBatchLikes = useCallback(() => {
-        if (pendingLikeCountRef.current > 0) {
-            console.log('=== 批量发送点赞 ===');
-            console.log('发送数量:', pendingLikeCountRef.current);
-
-            sendLike({
-                liveID,
-                count: pendingLikeCountRef.current,
-                onSuccess: () => {
-                    console.log('批量sendLike success, count:', pendingLikeCountRef.current);
-                    lastSendTimeRef.current = Date.now();
-                    isFirstClickRef.current = false;
-                },
-                onError: (error) => {
-                    console.error('批量sendLike failed:', error);
-                },
-            });
-
-            pendingLikeCountRef.current = 0;
-        }
-
-        if (batchTimerRef.current) {
-            clearTimeout(batchTimerRef.current);
-            batchTimerRef.current = null;
-        }
-    }, [sendLike, liveID]);
-
-    // 处理点赞点击事件
-    const handleLikeClick = useCallback(() => {
-        console.log('=== 点赞点击事件开始 ===');
-
-        // 添加点击间隔控制
-        const currentTime = Date.now();
-        if (currentTime - lastClickTimeRef.current < CLICK_INTERVAL) {
-            console.log('点击间隔太短，跳过本次点击');
-            return;
-        }
-        lastClickTimeRef.current = currentTime;
-
-        // 智能发送策略
-        const timeSinceLastSend = currentTime - lastSendTimeRef.current;
-        const shouldSendImmediately = isFirstClickRef.current || timeSinceLastSend >= BATCH_DELAY;
-
-        console.log('智能发送判断:', {
-            isFirstClick: isFirstClickRef.current,
-            timeSinceLastSend: timeSinceLastSend,
-            shouldSendImmediately: shouldSendImmediately,
-        });
-
-        // 累积点赞数量
-        pendingLikeCountRef.current += 1;
-
-        if (shouldSendImmediately) {
-            // 第一次点击或距离上次发送超过6秒，立即发送
-            console.log('立即发送点赞');
-            sendBatchLikes();
-            console.log('立即发送，显示动画');
-            createLikeAnimation(FIXED_ANIMATION_COUNT);
-        } else {
-            // 距离上次发送不足6秒，累积并设置定时器
-            console.log('累积点赞，设置延迟发送');
-            console.log('6秒内点击，不显示动画，只累积数量');
-
-            // 清除之前的定时器
-            if (batchTimerRef.current) {
-                clearTimeout(batchTimerRef.current);
-            }
-
-            // 计算剩余等待时间
-            const remainingTime = BATCH_DELAY - timeSinceLastSend;
-            console.log('剩余等待时间:', remainingTime, 'ms');
-
-            // 设置剩余时间的定时器
-            batchTimerRef.current = setTimeout(() => {
-                sendBatchLikes();
-                console.log('批量发送，显示动画');
-                createLikeAnimation(FIXED_ANIMATION_COUNT);
-            }, remainingTime);
-        }
-
-        console.log('=== 点赞点击事件结束 ===');
-    }, [sendBatchLikes, createLikeAnimation]);
-
-    // 处理接收到的点赞消息
-    const handleReceiveLikesMessage = useCallback((params?: unknown) => {
-        try {
-            // 解析参数
-            let data: any;
-            if (typeof params === 'string') {
-                data = JSON.parse(params);
-            } else if (params && typeof params === 'object') {
-                data = params;
-            } else {
-                return;
-            }
-
-            // 解析 sender 信息（sender 可能是 JSON 字符串）
-            let sender: any = null;
-            if (data.sender) {
-                if (typeof data.sender === 'string') {
-                    try {
-                        sender = JSON.parse(data.sender);
-                    } catch {
-                        // 如果解析失败，尝试直接使用
-                        sender = data.sender;
-                    }
-                } else {
-                    sender = data.sender;
-                }
-            }
-
-            // 如果发送人是自己，不显示动画（自己的点赞已经在点击时显示了动画）
-            if (sender?.userID && loginUserInfo?.userID && sender.userID === loginUserInfo.userID) {
-                console.log('收到自己的点赞消息，跳过动画');
-                return;
-            }
-
-            console.log('收到其他用户的点赞消息，显示动画');
-            createLikeAnimation(FIXED_ANIMATION_COUNT);
-        } catch (error) {
-            console.error('处理点赞消息失败:', error);
-        }
-    }, [createLikeAnimation, loginUserInfo?.userID]);
-
-    // 监听点赞消息
-    useEffect(() => {
-        if (!liveID) return;
-
-        addLikeListener('onReceiveLikesMessage', handleReceiveLikesMessage);
-
-        return () => {
-            removeLikeListener('onReceiveLikesMessage');
-            // 清理定时器
-            if (batchTimerRef.current) {
-                clearTimeout(batchTimerRef.current);
-                batchTimerRef.current = null;
-            }
-            // 组件卸载时发送待发送的点赞
-            if (pendingLikeCountRef.current > 0) {
-                console.log('组件卸载，发送待发送的点赞（不显示动画）');
-                sendBatchLikes();
-            }
-        };
-    }, [liveID, addLikeListener, removeLikeListener, handleReceiveLikesMessage, sendBatchLikes]);
-
-    return (
-        <View style={styles.container} pointerEvents="box-none">
-            {/* 点赞按钮 - 只有观众端显示 */}
-            {role !== 'anchor' && (
-            <TouchableOpacity
-                style={styles.likeButton}
-                onPress={handleLikeClick}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Image
-                    source={require('../static/images/live-like.png')}
-                    style={styles.likeIcon}
-                    resizeMode="contain"
-                />
-            </TouchableOpacity>
-            )}
-
-            {/* 点赞动画容器 - 主播和观众都显示 */}
-            {likeAnimations.length > 0 && (
-                <View style={styles.animationsContainer} pointerEvents="none">
-                    {likeAnimations.map((like) => (
-                        <Animated.View
-                            key={like.id}
-                            style={[
-                                styles.likeAnimation,
-                                {
-                                    left: like.left,
-                                    transform: [
-                                        { translateY: like.translateY },
-                                        { scale: like.scale },
-                                    ],
-                                    opacity: like.opacity,
-                                },
-                            ]}>
-                            <Image
-                                source={heartImages[like.imageIndex]}
-                                style={styles.heartIcon}
-                                resizeMode="contain"
-                            />
-                        </Animated.View>
-                    ))}
-                </View>
-            )}
-        </View>
-    );
+  return {
+    duration,
+    item: {
+      id,
+      icon,
+      startX,
+      progress,
+      translateX: interpolate(toPx([...stage1Zeros, p1x, p2x, p3x, p4x])),
+      translateY: interpolate(toPx([...stage1Y, p1y, p2y, p3y, p4y])),
+      scale: interpolate([...stage1Scale, 1, 1, 1, 1]),
+      opacity: interpolate([...stage1Ones, 0.66, 0.34, 0.22, 0]),
+    },
+  };
 }
 
-const styles = StyleSheet.create({
-    container: {
-        position: 'relative',
-        width: 32,
-        height: 32,
-        // 确保动画容器不被裁剪（动画容器需要更大的空间）
-        overflow: 'visible',
+function parseMaybeJson(value: unknown): any {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+export const Like = forwardRef<LikeRef, LikeProps>(function Like(
+  { role = 'audience', maxConcurrent = 8, enableHaptics = true },
+  ref
+) {
+  const { currentLive } = useLiveListState();
+  const liveID = String(currentLive?.liveID || '');
+  const { sendLike, addLikeListener, removeLikeListener } =
+    useLikeState(liveID);
+  const { loginUserInfo } = useLoginState();
+
+  const [floats, setFloats] = useState<FloatItem[]>([]);
+  const floatSeqRef = useRef(0);
+  const lastSpawnAtRef = useRef(0);
+  const maxConcurrentRef = useRef(maxConcurrent);
+  maxConcurrentRef.current = maxConcurrent;
+
+  const btnScale = useRef(new Animated.Value(1)).current;
+  const pressAtRef = useRef(0);
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pendingCountRef = useRef(0);
+  const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSendAtRef = useRef(0);
+  const sendLikeRef = useRef(sendLike);
+  sendLikeRef.current = sendLike;
+  const liveIDRef = useRef(liveID);
+  liveIDRef.current = liveID;
+  const selfUserIDRef = useRef(loginUserInfo?.userID);
+  selfUserIDRef.current = loginUserInfo?.userID;
+
+  const transitionBtn = useCallback(
+    (pressed: boolean) => {
+      Animated.timing(btnScale, {
+        toValue: pressed ? BTN_PRESSED_SCALE : 1,
+        duration: BTN_ANIM_DURATION,
+        easing: BTN_ANIM_EASING,
+        useNativeDriver: true,
+      }).start();
     },
-    likeButton: {
-        width: 32,
-        height: 32,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: 16,
-        zIndex: 1000,
+    [btnScale]
+  );
+
+  const clearReleaseTimer = () => {
+    if (releaseTimerRef.current != null) {
+      clearTimeout(releaseTimerRef.current);
+      releaseTimerRef.current = null;
+    }
+  };
+
+  const onPressIn = () => {
+    clearReleaseTimer();
+    pressAtRef.current = Date.now();
+    transitionBtn(true);
+  };
+
+  const onPressOut = () => {
+    clearReleaseTimer();
+    const delay = Math.max(
+      0,
+      MIN_PRESS_VISIBLE_MS - (Date.now() - pressAtRef.current)
+    );
+    if (delay === 0) {
+      transitionBtn(false);
+      return;
+    }
+    releaseTimerRef.current = setTimeout(() => {
+      releaseTimerRef.current = null;
+      transitionBtn(false);
+    }, delay);
+  };
+
+  const spawnFloat = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSpawnAtRef.current < SPAWN_THROTTLE) return;
+    lastSpawnAtRef.current = now;
+
+    const { item, duration } = createFloat(++floatSeqRef.current);
+    setFloats((prev) => {
+      const next =
+        prev.length >= maxConcurrentRef.current
+          ? prev.slice(prev.length - maxConcurrentRef.current + 1)
+          : prev;
+      prev
+        .filter((f) => !next.includes(f))
+        .forEach((f) => f.progress.stopAnimation());
+      return [...next, item];
+    });
+    Animated.timing(item.progress, {
+      toValue: 1,
+      duration,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start(() => {
+      setFloats((prev) => prev.filter((f) => f.id !== item.id));
+    });
+  }, []);
+
+  const flushBatch = useCallback(() => {
+    if (batchTimerRef.current != null) {
+      clearTimeout(batchTimerRef.current);
+      batchTimerRef.current = null;
+    }
+    if (pendingCountRef.current <= 0) return;
+    const count = pendingCountRef.current;
+    pendingCountRef.current = 0;
+    lastSendAtRef.current = Date.now();
+    sendLikeRef.current({
+      liveID: liveIDRef.current,
+      count,
+      onError: (error) => {
+        console.error('sendLike failed:', error);
+      },
+    });
+  }, []);
+
+  const handleLikeTap = () => {
+    if (enableHaptics && Platform.OS === 'android') {
+      Vibration.vibrate(ANDROID_LIGHT_VIBRATE_MS);
+    }
+    spawnFloat();
+
+    pendingCountRef.current += 1;
+    const now = Date.now();
+    if (
+      lastSendAtRef.current === 0 ||
+      now - lastSendAtRef.current >= BATCH_DELAY
+    ) {
+      flushBatch();
+      return;
+    }
+    if (batchTimerRef.current == null) {
+      const remain = Math.max(0, BATCH_DELAY - (now - lastSendAtRef.current));
+      batchTimerRef.current = setTimeout(flushBatch, remain);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({ triggerLike: spawnFloat }), [spawnFloat]);
+
+  useEffect(() => {
+    if (!liveID) return undefined;
+    addLikeListener('onReceiveLikesMessage', (event?: unknown) => {
+      const res = parseMaybeJson(event);
+      const sender = parseMaybeJson(res?.sender);
+      if (sender && sender.userID === selfUserIDRef.current) return;
+      spawnFloat();
+    });
+    return () => {
+      removeLikeListener('onReceiveLikesMessage');
+    };
+  }, [liveID, addLikeListener, removeLikeListener, spawnFloat]);
+
+  useEffect(
+    () => () => {
+      clearReleaseTimer();
+      flushBatch();
     },
-    likeIcon: {
-        width: 32,
-        height: 32,
-    },
-    animationsContainer: {
-        position: 'absolute',
-        bottom: 40,
-        right: 40,
-        width: 200,
-        height: 300,
-        zIndex: 0,
-        pointerEvents: 'none',
-        overflow: 'hidden',
-    },
-    likeAnimation: {
-        position: 'absolute',
-        bottom: 0,
-        width: 30,
-        height: 30,
-        pointerEvents: 'none',
-    },
-    heartIcon: {
-        width: 30,
-        height: 30,
-    },
+    [flushBatch]
+  );
+
+  return (
+    <View style={styles.container} pointerEvents="box-none">
+      {role !== 'anchor' && (
+        <Pressable
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          onPress={handleLikeTap}
+        >
+          <Animated.View
+            style={[styles.button, { transform: [{ scale: btnScale }] }]}
+          >
+            <Image
+              source={LIKE_ICON}
+              style={styles.buttonIcon}
+              resizeMode="contain"
+            />
+          </Animated.View>
+        </Pressable>
+      )}
+
+      {floats.length > 0 && (
+        <View style={styles.floatLayer} pointerEvents="none">
+          {floats.map((f) => (
+            <Animated.View
+              key={f.id}
+              style={[
+                styles.float,
+                {
+                  left: rpxToPx(f.startX - FLOAT_SIZE / 2),
+                  opacity: f.opacity,
+                  transform: [
+                    { translateX: f.translateX },
+                    { translateY: f.translateY },
+                    { scale: f.scale },
+                  ],
+                },
+              ]}
+            >
+              <Image
+                source={f.icon}
+                style={styles.floatIcon}
+                resizeMode="contain"
+              />
+            </Animated.View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
 });
+
+const BTN_CENTER_X = BTN_MARGIN_LEFT + BTN_SIZE / 2;
+const BTN_CENTER_Y = BTN_SIZE / 2;
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'relative',
+    width: rpxToPx(88),
+    height: rpxToPx(72),
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  button: {
+    width: rpxToPx(BTN_SIZE),
+    height: rpxToPx(BTN_SIZE),
+    marginLeft: rpxToPx(BTN_MARGIN_LEFT),
+    borderRadius: rpxToPx(BTN_SIZE / 2),
+    backgroundColor: 'rgba(20, 20, 22, 0.54)',
+    borderWidth: rpxToPx(2),
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonIcon: {
+    width: rpxToPx(BTN_SIZE),
+    height: rpxToPx(BTN_SIZE),
+  },
+  floatLayer: {
+    position: 'absolute',
+    left: rpxToPx(BTN_CENTER_X + BTN_CENTER_FROM_RIGHT - LAYER_W),
+    top: rpxToPx(BTN_CENTER_Y - LAYER_H),
+    width: rpxToPx(LAYER_W),
+    height: rpxToPx(LAYER_H),
+    zIndex: 100,
+    elevation: 100,
+  },
+  float: {
+    position: 'absolute',
+    bottom: rpxToPx(-FLOAT_SIZE / 2),
+    width: rpxToPx(FLOAT_SIZE),
+    height: rpxToPx(FLOAT_SIZE),
+  },
+  floatIcon: {
+    width: rpxToPx(FLOAT_SIZE),
+    height: rpxToPx(FLOAT_SIZE),
+  },
+});
+
+export default Like;

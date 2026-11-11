@@ -8,14 +8,15 @@
  * Use Cases: Like interactions, popularity statistics, interactive effects, user participation, and other basic interaction scenarios.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { callNativeAPI } from '../../utils';
+import { useState, useEffect, useCallback } from 'react';
+import { callNativeAPI, createStateError } from '../../utils';
 import { addListener, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
     SendLikeOptions,
 } from './types';
 import { likeStore } from './store';
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 
 /**
  * Like listener function type
@@ -29,20 +30,50 @@ const LIKE_EVENTS = [
     'totalLikeCount',
 ];
 
-/**
- * Safely parse JSON
- */
-function safeJsonParse<T>(json: string, defaultValue: T): T {
-    try {
-        if (!json || typeof json !== 'string') {
-            return defaultValue;
+
+type WritableMap = Record<string, unknown>;
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+    return (event: WritableMap) => {
+        try {
+            const data = event && typeof event === 'object' && !Array.isArray(event)
+                ? event
+                : typeof event === 'string'
+                    ? JSON.parse(event)
+                    : event;
+
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                const updates: {
+                    totalLikeCount?: number;
+                } = {};
+
+                Object.keys(data).forEach((key) => {
+                    if (LIKE_EVENTS.includes(key)) {
+                        const value = data[key];
+
+                        if (key === 'totalLikeCount') {
+                            const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
+                            updates.totalLikeCount = parsedData;
+                        }
+                    }
+                });
+
+                if (Object.keys(updates).length > 0) {
+                    likeStore.setState(liveID, updates);
+                }
+            }
+        } catch (error) {
+            console.error(`[LikeState] ${eventName} event parse error:`, error, event);
         }
-        return JSON.parse(json) as T;
-    } catch (error) {
-        console.error('safeJsonParse error:', error);
-        return defaultValue;
-    }
+    };
 }
+
+const currentLiveBinding = createCurrentLiveBinding({
+    store: 'LikeStore',
+    events: LIKE_EVENTS,
+    createHandler: createNativeEventHandler,
+    reset: (liveID) => likeStore.resetState(liveID),
+});
 
 /**
  * LikeState Hook
@@ -107,99 +138,10 @@ export function useLikeState(liveID: string) {
         return unsubscribe;
     }, [liveID]);
 
-    // Event listener references
-    type WritableMap = Record<string, unknown>;
-
-    /**
-     * Handle like status change events
-     * Updates global store, which automatically notifies all subscribers
-     */
-    const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-        try {
-            // If event is already an object, use it directly; otherwise try to parse
-            const data = event && typeof event === 'object' && !Array.isArray(event)
-                ? event
-                : typeof event === 'string'
-                    ? JSON.parse(event)
-                    : event;
-
-            console.log(`[LikeState] ${eventName} event received:`, JSON.stringify(data));
-
-            // Check if data's keys match any value in LIKE_EVENTS
-            if (data && typeof data === 'object' && !Array.isArray(data)) {
-                const updates: {
-                    totalLikeCount?: number;
-                } = {};
-
-                Object.keys(data).forEach((key) => {
-                    if (LIKE_EVENTS.includes(key)) {
-                        const value = data[key];
-
-                        // Update corresponding reactive data based on different keys
-                        if (key === 'totalLikeCount') {
-                            // totalLikeCount is number type
-                            const parsedData = typeof value === 'number' ? value : (Number(value) || 0);
-                            updates.totalLikeCount = parsedData;
-                        }
-                    }
-                });
-
-                // Batch update global store (only update once to avoid multiple notifications)
-                if (Object.keys(updates).length > 0) {
-                    likeStore.setState(liveID, updates);
-                }
-            }
-        } catch (error) {
-            console.error(`[LikeState] ${eventName} event parse error:`, error);
-            console.log(`[LikeState] ${eventName} event received (raw):`, event);
-        }
-    }, [liveID]);
-
-    /**
-     * Bind event listeners
-     */
     useEffect(() => {
-        if (!liveID) {
-            return;
-        }
-
-        const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-            return {
-                type: 'state',
-                store: 'LikeStore',
-                name: eventName,
-                roomID: liveID ?? null,
-                listenerID: listenerID ?? null,
-            };
-        };
-
-        // Save references to listener cleanup functions
-        const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-        LIKE_EVENTS.forEach((eventName) => {
-            const keyObject = createListenerKeyObject(eventName);
-            const key = JSON.stringify(keyObject);
-            console.log(key);
-            // addListener automatically registers event listeners for both Native side and JS layer
-            const subscription = addListener(key, handleEvent(eventName));
-            if (subscription) {
-                cleanupFunctions.push(subscription);
-            }
-
-            console.log(`[LikeState] Added listener for: ${eventName}, eventName=${key}`);
-        });
-        return () => {
-            LIKE_EVENTS.forEach((eventName) => {
-                const keyObject = createListenerKeyObject(eventName);
-                const key = JSON.stringify(keyObject);
-                removeListener(key);
-            });
-            // Also clean up JS layer subscriptions
-            cleanupFunctions.forEach((cleanup) => {
-                cleanup.remove();
-            });
-        };
-    }, [handleEvent, liveID]);
+        currentLiveBinding.ensureWatchCurrentLive();
+        currentLiveBinding.bindEvent(liveID);
+    }, [liveID]);
 
     /**
      * Send like
@@ -225,7 +167,7 @@ export function useLikeState(liveID: string) {
                 // Only trigger callback on success, state update is handled by event listener
                 onSuccess?.();
             } else {
-                const error = new Error(result.error || 'Send like failed');
+                const error = createStateError(result, 'Send like failed');
                 onError?.(error);
             }
         } catch (error: any) {

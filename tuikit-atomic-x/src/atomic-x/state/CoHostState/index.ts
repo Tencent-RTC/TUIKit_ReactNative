@@ -8,11 +8,12 @@
  * Use Cases: Host connections, collaborative streaming, cross-platform connections, and streamer interactions.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { callNativeAPI } from '../../utils';
+import { useState, useEffect, useCallback } from 'react';
+import { callNativeAPI, createStateError } from '../../utils';
 import { addListener, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import { coHostStore } from './store';
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 import type {
   LiveUserInfoParam,
   RequestHostConnectionOptions,
@@ -53,6 +54,99 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
     return defaultValue;
   }
 }
+
+type WritableMap = Record<string, unknown>;
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+  return (event: WritableMap) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          connected?: LiveUserInfoParam[];
+          invitees?: LiveUserInfoParam[];
+          applicant?: LiveUserInfoParam | undefined;
+          candidates?: LiveUserInfoParam[];
+          coHostStatus?: CoHostStatus;
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (CO_HOST_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'connected') {
+              let parsedData: LiveUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as LiveUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.connected = parsedData;
+            } else if (key === 'invitees') {
+              let parsedData: LiveUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as LiveUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.invitees = parsedData;
+            } else if (key === 'applicant') {
+              let parsedData: LiveUserInfoParam | undefined;
+              if (value === null || value === undefined) {
+                parsedData = undefined;
+              } else if (typeof value === 'object') {
+                parsedData = value as LiveUserInfoParam;
+              } else if (typeof value === 'string') {
+                const parsed = safeJsonParse<LiveUserInfoParam | null>(value, null);
+                parsedData = parsed || undefined;
+              } else {
+                const parsed = safeJsonParse<LiveUserInfoParam | null>(JSON.stringify(value), null);
+                parsedData = parsed || undefined;
+              }
+              updates.applicant = parsedData;
+            } else if (key === 'candidates') {
+              let parsedData: LiveUserInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as LiveUserInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
+              }
+              updates.candidates = parsedData;
+            } else if (key === 'coHostStatus') {
+              const numValue = typeof value === 'number' ? value : (Number(value) || CoHostStatus.DISCONNECTED);
+              const parsedData = isNaN(numValue) ? CoHostStatus.DISCONNECTED : (numValue as CoHostStatus);
+              updates.coHostStatus = parsedData;
+            }
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          coHostStore.setState(liveID, updates);
+        }
+      }
+    } catch (error) {
+      console.error(`[CoHostState] ${eventName} event parse error:`, error, event);
+    }
+  };
+}
+
+const currentLiveBinding = createCurrentLiveBinding({
+  store: 'CoHostStore',
+  events: CO_HOST_EVENTS,
+  createHandler: createNativeEventHandler,
+  reset: (liveID) => coHostStore.resetState(liveID),
+});
 
 /**
  * CoHostState Hook
@@ -185,153 +279,10 @@ export function useCoHostState(liveID: string) {
     return unsubscribe;
   }, [liveID]);
 
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle co-host status change events
-   * Updates global store, which automatically notifies all subscribers
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[CoHostState] ${eventName} event received:`, JSON.stringify(data));
-
-      // Check if data's keys match any value in CO_HOST_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const updates: {
-          connected?: LiveUserInfoParam[];
-          invitees?: LiveUserInfoParam[];
-          applicant?: LiveUserInfoParam | undefined;
-          candidates?: LiveUserInfoParam[];
-          coHostStatus?: CoHostStatus;
-        } = {};
-
-        Object.keys(data).forEach((key) => {
-          if (CO_HOST_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'connected') {
-              // connected is array type
-              let parsedData: LiveUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as LiveUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.connected = parsedData;
-            } else if (key === 'invitees') {
-              // invitees is array type
-              let parsedData: LiveUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as LiveUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.invitees = parsedData;
-            } else if (key === 'applicant') {
-              // applicant can be object or null
-              let parsedData: LiveUserInfoParam | undefined;
-              if (value === null || value === undefined) {
-                parsedData = undefined;
-              } else if (typeof value === 'object') {
-                parsedData = value as LiveUserInfoParam;
-              } else if (typeof value === 'string') {
-                const parsed = safeJsonParse<LiveUserInfoParam | null>(value, null);
-                parsedData = parsed || undefined;
-              } else {
-                const parsed = safeJsonParse<LiveUserInfoParam | null>(JSON.stringify(value), null);
-                parsedData = parsed || undefined;
-              }
-              updates.applicant = parsedData;
-            } else if (key === 'candidates') {
-              // candidates is array type
-              let parsedData: LiveUserInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as LiveUserInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<LiveUserInfoParam[]>(JSON.stringify(value), []);
-              }
-              updates.candidates = parsedData;
-            } else if (key === 'coHostStatus') {
-              // coHostStatus is enum type
-              const numValue = typeof value === 'number' ? value : (Number(value) || CoHostStatus.DISCONNECTED);
-              const parsedData = isNaN(numValue) ? CoHostStatus.DISCONNECTED : (numValue as CoHostStatus);
-              updates.coHostStatus = parsedData;
-            }
-          }
-        });
-
-        // Batch update global store (only update once to avoid multiple notifications)
-        if (Object.keys(updates).length > 0) {
-          coHostStore.setState(liveID, updates);
-        }
-      }
-    } catch (error) {
-      console.error(`[CoHostState] ${eventName} event parse error:`, error);
-      console.log(`[CoHostState] ${eventName} event received (raw):`, event);
-    }
-  }, [liveID]);
-
-  /**
-   * Bind event listeners
-   */
   useEffect(() => {
-    if (!liveID) {
-      return;
-    }
-
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'CoHostStore',
-        name: eventName,
-        roomID: liveID ?? null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // Save references to listener cleanup functions
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    CO_HOST_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener automatically registers event listeners for both Native side and JS layer
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[CoHostState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      CO_HOST_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent, liveID]);
+    currentLiveBinding.ensureWatchCurrentLive();
+    currentLiveBinding.bindEvent(liveID);
+  }, [liveID]);
 
   /**
    * Request host connection
@@ -355,8 +306,7 @@ export function useCoHostState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Request host connection failed');
-        (error as any).code = result.code;
+        const error = createStateError(result, 'Request host connection failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -388,7 +338,7 @@ export function useCoHostState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Cancel host connection failed');
+        const error = createStateError(result, 'Cancel host connection failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -427,7 +377,7 @@ export function useCoHostState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Accept host connection failed');
+        const error = createStateError(result, 'Accept host connection failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -466,7 +416,7 @@ export function useCoHostState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Reject host connection failed');
+        const error = createStateError(result, 'Reject host connection failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -497,7 +447,7 @@ export function useCoHostState(liveID: string) {
       if (result.success) {
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Exit host connection failed');
+        const error = createStateError(result, 'Exit host connection failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -570,5 +520,4 @@ export function useCoHostState(liveID: string) {
 }
 
 export default useCoHostState;
-
 

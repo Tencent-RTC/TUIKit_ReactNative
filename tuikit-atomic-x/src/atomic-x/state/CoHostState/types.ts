@@ -35,9 +35,10 @@ export enum ConnectionCode {
  */
 export interface LiveUserInfoParam {
   userID: string;
-  nickname?: string;
+  userName?: string;
   avatarURL?: string;
-  role?: string;
+  liveID?: string;
+  level?: number;
   [key: string]: unknown;
 }
 

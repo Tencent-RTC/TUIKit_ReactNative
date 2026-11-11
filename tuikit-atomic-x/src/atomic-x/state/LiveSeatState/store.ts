@@ -56,6 +56,10 @@ class LiveSeatStore {
    */
   setState(liveID: string, updates: Partial<LiveSeatState>): void {
     const currentState = this.getState(liveID);
+    const hasChanged = (Object.keys(updates) as (keyof LiveSeatState)[]).some(
+      (key) => currentState[key] !== updates[key]
+    );
+    if (!hasChanged) return;
     const newState: LiveSeatState = {
       ...currentState,
       ...updates,
@@ -104,6 +108,11 @@ class LiveSeatStore {
         }
       });
     }
+  }
+
+  resetState(liveID: string): void {
+    this.states.delete(liveID);
+    this.notifyListeners(liveID, this.getState(liveID));
   }
 
   /**

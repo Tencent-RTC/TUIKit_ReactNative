@@ -9,8 +9,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { callNativeAPI } from '../../utils';
-import { addListener, removeListener } from '../../bridge/HybridBridge';
+import { Platform } from 'react-native';
+import { callNativeAPI, createStateError } from '../../utils';
+import { addListener, callExperimentalAPI as callNativeExperimentalAPI, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
   LiveInfoParam,
@@ -20,11 +21,16 @@ import type {
   LeaveLiveOptions,
   EndLiveOptions,
   UpdateLiveInfoOptions,
+  UpdateLiveMetaDataOptions,
   CallExperimentalAPIOptions,
   ILiveListener,
 } from './types';
 import { validateRequired } from '../../utils';
 import { liveListStore } from './store';
+import {
+  startForegroundService,
+  stopForegroundService,
+} from '../../utils/foregroundService';
 
 /**
  * Live list event name constants
@@ -34,6 +40,20 @@ const LIVE_LIST_EVENTS = [
   'liveListCursor',
   'currentLive',
 ];
+
+// iOS AtomicXCore reads modifyFlagList as LiveInfo.ModifyFlag raw bitmask values; Android reads them as ordinals.
+const IOS_MODIFY_FLAG_BITS: Record<number, number> = {
+  1: 1 << 0,
+  2: 1 << 1,
+  3: 1 << 2,
+  4: 1 << 5,
+  5: 1 << 6,
+  6: 1 << 7,
+  7: 1 << 8,
+  8: 1 << 9,
+  9: 1 << 10,
+  10: 1 << 11,
+};
 
 /**
  * Safely parse JSON
@@ -48,6 +68,95 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
     console.error('safeJsonParse error:', error);
     return defaultValue;
   }
+}
+
+/**
+ * Handle live state change events (module-level, shared by all hook instances)
+ */
+function handleNativeEvent(eventName: string) {
+  return (event: Record<string, unknown>) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        Object.keys(data).forEach((key) => {
+          if (LIVE_LIST_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'liveList') {
+              let parsedData: LiveInfoParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as LiveInfoParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveInfoParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<LiveInfoParam[]>(JSON.stringify(value), []);
+              }
+              const lastIndexMap = new Map<string, number>();
+              parsedData.forEach((live, index) => {
+                if (live.liveID) {
+                  lastIndexMap.set(live.liveID, index);
+                }
+              });
+              parsedData = parsedData.filter((live, index) => {
+                return lastIndexMap.get(live.liveID) === index;
+              });
+              liveListStore.setState({ liveList: parsedData });
+            } else if (key === 'liveListCursor') {
+              let parsedData: string;
+              if (typeof value === 'string') {
+                parsedData = value;
+              } else {
+                parsedData = safeJsonParse<string>(JSON.stringify(value), '');
+              }
+              liveListStore.setState({ liveListCursor: parsedData });
+            } else if (key === 'currentLive') {
+              let parsedData: LiveInfoParam | null;
+              if (value === null || value === undefined) {
+                parsedData = null;
+              } else if (typeof value === 'object') {
+                parsedData = value as LiveInfoParam;
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<LiveInfoParam | null>(value, null);
+              } else {
+                parsedData = safeJsonParse<LiveInfoParam | null>(JSON.stringify(value), null);
+              }
+              liveListStore.setState({ currentLive: parsedData });
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error(`[LiveListStore] ${eventName} event parse error:`, error);
+    }
+  };
+}
+
+/**
+ * Register Native event listeners at module load time (once, never removed)
+ */
+LIVE_LIST_EVENTS.forEach((eventName) => {
+  const keyObject: HybridListenerKey = {
+    type: 'state',
+    store: 'LiveListStore',
+    name: eventName,
+    roomID: null,
+    listenerID: null,
+  };
+  const key = JSON.stringify(keyObject);
+  addListener(key, handleNativeEvent(eventName));
+});
+
+export function clearLiveListState(): void {
+  liveListStore.setState({
+    liveList: [],
+    liveListCursor: '',
+    currentLive: null,
+  });
 }
 
 /**
@@ -133,124 +242,6 @@ export function useLiveListState() {
    */
   const [currentLive, setCurrentLive] = useState<LiveInfoParam | null>(initialState.currentLive);
 
-  // Event listener references
-
-  // Live list event listener mapping
-  type WritableMap = Record<string, unknown>;
-
-
-
-  /**
-   * Handle live state change events
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[LivePage] ${eventName} event received:`, JSON.stringify(data));
-
-      // Check if data key matches any value in LIVE_LIST_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        Object.keys(data).forEach((key) => {
-          if (LIVE_LIST_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'liveList') {
-              // liveList is an array type
-              let parsedData: LiveInfoParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as LiveInfoParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveInfoParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<LiveInfoParam[]>(JSON.stringify(value), []);
-              }
-              // Update global store, which drives all hook instances uniformly
-              liveListStore.setState({ liveList: parsedData });
-            } else if (key === 'liveListCursor') {
-              // liveListCursor is a string type
-              let parsedData: string;
-              if (typeof value === 'string') {
-                parsedData = value;
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<string>(value, '');
-              } else {
-                parsedData = safeJsonParse<string>(JSON.stringify(value), '');
-              }
-              liveListStore.setState({ liveListCursor: parsedData });
-            } else if (key === 'currentLive') {
-              // currentLive can be an object or null
-              let parsedData: LiveInfoParam | null;
-              if (value === null || value === undefined) {
-                parsedData = null;
-              } else if (typeof value === 'object') {
-                parsedData = value as LiveInfoParam;
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<LiveInfoParam | null>(value, null);
-              } else {
-                parsedData = safeJsonParse<LiveInfoParam | null>(JSON.stringify(value), null);
-              }
-              liveListStore.setState({ currentLive: parsedData });
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error(`[LivePage] ${eventName} event parse error:`, error);
-      console.log(`[LivePage] ${eventName} event received (raw):`, event);
-    }
-  }, []);
-
-
-  /**
-   * Bind event listeners
-   */
-  useEffect(() => {
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'LiveListStore',
-        name: eventName,
-        roomID: null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // Save references to listener cleanup functions
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    LIVE_LIST_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener will automatically register event listeners on both Native and JS layers
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[LivePage] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      LIVE_LIST_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent]);
-
   /**
    * Subscribe to global liveListStore changes to drive local state
    * Ensures multiple pages share the same liveList / currentLive / cursor
@@ -284,7 +275,7 @@ export function useLiveListState() {
         // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Fetch live list failed');
+        const error = createStateError(result, 'Fetch live list failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -312,8 +303,9 @@ export function useLiveListState() {
       if (result.success) {
         // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
+        startForegroundService();
       } else {
-        const error = new Error(result.error || 'Create live failed');
+        const error = createStateError(result, 'Create live failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -349,8 +341,9 @@ export function useLiveListState() {
       if (result.success) {
         // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
+        startForegroundService();
       } else {
-        const error = new Error(result.error || 'Join live failed');
+        const error = createStateError(result, 'Join live failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -371,21 +364,22 @@ export function useLiveListState() {
   const leaveLive = useCallback(async (params?: LeaveLiveOptions): Promise<void> => {
     const { onSuccess, onError, ...leaveParams } = params || {};
 
+    // Clear synchronously before the request: a late native currentLive push would otherwise unbind the next room's subscriptions.
+    liveListStore.setState({ currentLive: null });
     try {
       const result = await callNativeAPI<void>('leaveLive', leaveParams);
 
       if (result.success) {
-        // On success, trigger callback and clear global LiveListStore state
-        liveListStore.clearState();
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Leave live failed');
+        const error = createStateError(result, 'Leave live failed');
         onError?.(error);
       }
     } catch (error: any) {
       const err = error instanceof Error ? error : new Error(String(error));
       onError?.(err);
     }
+    stopForegroundService();
   }, []);
 
   /**
@@ -400,15 +394,68 @@ export function useLiveListState() {
   const endLive = useCallback(async (params?: EndLiveOptions): Promise<void> => {
     const { onSuccess, onError, ...endParams } = params || {};
 
+    liveListStore.setState({ currentLive: null });
     try {
       const result = await callNativeAPI<void>('endLive', endParams);
 
       if (result.success) {
-        // On success, trigger callback and clear global LiveListStore state
-        liveListStore.clearState();
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'End live failed');
+        const error = createStateError(result, 'End live failed');
+        onError?.(error);
+      }
+    } catch (error: any) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      onError?.(err);
+    }
+    stopForegroundService();
+  }, []);
+
+  /**
+   * Update live information
+   *
+   * @param params - Update parameters
+   * @example
+   * ```tsx
+   * import { LiveInfoModifyFlag } from '@tencentcloud/react-native-tuikit-atomic-x';
+   *
+   * await updateLiveInfo({
+   *   liveInfo: { liveID: 'your_live_id', liveName: 'new title', coverURL: 'https://xxx.jpg' },
+   *   modifyFlagList: [LiveInfoModifyFlag.LIVE_NAME, LiveInfoModifyFlag.COVER_URL],
+   *   onSuccess: () => console.log('Update success'),
+   *   onError: (error) => console.error('Update failed:', error)
+   * });
+   * ```
+   */
+  const updateLiveInfo = useCallback(async (params: UpdateLiveInfoOptions): Promise<void> => {
+    // Validate required parameters
+    if (!params.liveInfo?.liveID) {
+      const error = new Error('Missing required parameter: liveInfo.liveID');
+      params.onError?.(error);
+      return;
+    }
+    if (!params.modifyFlagList || params.modifyFlagList.length === 0) {
+      const error = new Error('Missing required parameter: modifyFlagList');
+      params.onError?.(error);
+      return;
+    }
+
+    // Extract callback functions
+    const { onSuccess, onError, ...updateParams } = params;
+    if (Platform.OS === 'ios') {
+      updateParams.modifyFlagList = updateParams.modifyFlagList.map(
+        (flag) => IOS_MODIFY_FLAG_BITS[flag] ?? flag
+      ) as UpdateLiveInfoOptions['modifyFlagList'];
+    }
+
+    try {
+      const result = await callNativeAPI<LiveInfoParam>('updateLiveInfo', updateParams);
+
+      if (result.success) {
+        // On success, only trigger callback; state update is handled by event listeners
+        onSuccess?.();
+      } else {
+        const error = createStateError(result, 'Update live info failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -418,34 +465,35 @@ export function useLiveListState() {
   }, []);
 
   /**
-   * Update live information
+   * Update live meta data
    *
-   * @param params - Update parameters
+   * @param params - Update meta data parameters
    * @example
    * ```tsx
-   * await updateLiveInfo({ liveID: 'your_live_id', title: 'new title' });
+   * await updateLiveMetaData({
+   *   liveID: 'your_live_id',
+   *   metaData: { key1: 'value1', key2: 'value2' },
+   *   onSuccess: () => console.log('Update meta data success'),
+   *   onError: (error) => console.error('Update meta data failed:', error)
+   * });
    * ```
    */
-  const updateLiveInfo = useCallback(async (params: UpdateLiveInfoOptions): Promise<void> => {
-    // Validate required parameters
-    const validation = validateRequired(params, ['liveID']);
-    if (!validation.valid) {
-      const error = new Error(`Missing required parameters: ${validation.missing?.join(', ')}`);
+  const updateLiveMetaData = useCallback(async (params: UpdateLiveMetaDataOptions): Promise<void> => {
+    if (!params.metaData) {
+      const error = new Error('Missing required parameter: metaData');
       params.onError?.(error);
       return;
     }
 
-    // Extract callback functions
     const { onSuccess, onError, ...updateParams } = params;
 
     try {
-      const result = await callNativeAPI<LiveInfoParam>('updateLiveInfo', updateParams);
+      const result = await callNativeAPI<void>('updateLiveMetaData', updateParams);
 
       if (result.success) {
-        // On success, only trigger callback; state update is handled by event listeners
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Update live info failed');
+        const error = createStateError(result, 'Update live meta data failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -482,11 +530,9 @@ export function useLiveListState() {
     console.log('callExperimentalAPI', finalParams);
 
     try {
-      const result = await callNativeAPI<unknown>('callExperimentalAPI', finalParams);
-      if (result.success && finalParams.onResponse) {
-        const responseStr = result.data ? JSON.stringify(result.data) : undefined;
-        finalParams.onResponse(responseStr);
-      }
+      const { onResponse, ...request } = finalParams;
+      const responseStr = await callNativeExperimentalAPI(JSON.stringify(request));
+      onResponse?.(responseStr || undefined);
     } catch (error: any) {
       console.error('callExperimentalAPI error:', error);
     }
@@ -527,7 +573,7 @@ export function useLiveListState() {
    * removeLiveListListener('onLiveEnded', liveEndedListener);
    * ```
    */
-  const removeLiveListListener = useCallback((eventName: string, listener: ILiveListener, listenerID?: string): void => {
+  const removeLiveListListener = useCallback((eventName: string, _listener: ILiveListener, listenerID?: string): void => {
     const createListenerKeyObject = {
       type: 'state',
       store: 'LiveListStore',
@@ -540,8 +586,6 @@ export function useLiveListState() {
 
   }, []);
 
-
-
   return {
     liveList,               // Live list data
     liveListCursor,         // Live list pagination cursor
@@ -553,6 +597,7 @@ export function useLiveListState() {
     leaveLive,              // Leave live
     endLive,                // End live
     updateLiveInfo,         // Update live information
+    updateLiveMetaData,     // Update live meta data
     callExperimentalAPI,    // Call experimental API
 
     addLiveListListener,    // Add event listener

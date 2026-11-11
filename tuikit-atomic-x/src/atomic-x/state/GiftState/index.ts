@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { callNativeAPI } from '../../utils';
+import { callNativeAPI, createStateError } from '../../utils';
 import { addListener, removeListener } from '../../bridge/HybridBridge';
 import type { HybridListenerKey } from '../../bridge/HybridBridge';
 import type {
@@ -19,6 +19,7 @@ import type {
   SetLanguageOptions,
 } from './types';
 import { giftStore } from './store';
+import { createCurrentLiveBinding } from '../internal/currentLiveWatcher';
 
 /**
  * Gift listener function type
@@ -46,6 +47,57 @@ function safeJsonParse<T>(json: string, defaultValue: T): T {
     return defaultValue;
   }
 }
+
+type WritableMap = Record<string, unknown>;
+
+function createNativeEventHandler(liveID: string, eventName: string) {
+  return (event: WritableMap) => {
+    try {
+      const data = event && typeof event === 'object' && !Array.isArray(event)
+        ? event
+        : typeof event === 'string'
+          ? JSON.parse(event)
+          : event;
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const updates: {
+          usableGifts?: GiftCategoryParam[];
+        } = {};
+
+        Object.keys(data).forEach((key) => {
+          if (GIFT_EVENTS.includes(key)) {
+            const value = data[key];
+
+            if (key === 'usableGifts') {
+              let parsedData: GiftCategoryParam[];
+              if (Array.isArray(value)) {
+                parsedData = value as GiftCategoryParam[];
+              } else if (typeof value === 'string') {
+                parsedData = safeJsonParse<GiftCategoryParam[]>(value, []);
+              } else {
+                parsedData = safeJsonParse<GiftCategoryParam[]>(JSON.stringify(value), []);
+              }
+              updates.usableGifts = parsedData;
+            }
+          }
+        });
+
+        if (Object.keys(updates).length > 0) {
+          giftStore.setState(liveID, updates);
+        }
+      }
+    } catch (error) {
+      console.error(`[GiftState] ${eventName} event parse error:`, error, event);
+    }
+  };
+}
+
+const currentLiveBinding = createCurrentLiveBinding({
+  store: 'GiftStore',
+  events: GIFT_EVENTS,
+  createHandler: createNativeEventHandler,
+  reset: (liveID) => giftStore.resetState(liveID),
+});
 
 /**
  * GiftState Hook
@@ -125,107 +177,10 @@ export function useGiftState(liveID: string) {
     return unsubscribe;
   }, [liveID]);
 
-  // Event listener references
-  type WritableMap = Record<string, unknown>;
-
-  /**
-   * Handle gift status change events
-   * Updates global store, which automatically notifies all subscribers
-   */
-  const handleEvent = useCallback((eventName: string) => (event: WritableMap) => {
-    try {
-      // If event is already an object, use it directly; otherwise try to parse
-      const data = event && typeof event === 'object' && !Array.isArray(event)
-        ? event
-        : typeof event === 'string'
-          ? JSON.parse(event)
-          : event;
-
-      console.log(`[GiftState] ${eventName} event received:`, JSON.stringify(data));
-
-      // Check if data's keys match any value in GIFT_EVENTS
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const updates: {
-          usableGifts?: GiftCategoryParam[];
-        } = {};
-
-        Object.keys(data).forEach((key) => {
-          if (GIFT_EVENTS.includes(key)) {
-            const value = data[key];
-
-            // Update corresponding reactive data based on different keys
-            if (key === 'usableGifts') {
-              // usableGifts is array type
-              let parsedData: GiftCategoryParam[];
-              if (Array.isArray(value)) {
-                parsedData = value as GiftCategoryParam[];
-              } else if (typeof value === 'string') {
-                parsedData = safeJsonParse<GiftCategoryParam[]>(value, []);
-              } else {
-                parsedData = safeJsonParse<GiftCategoryParam[]>(JSON.stringify(value), []);
-              }
-              updates.usableGifts = parsedData;
-            }
-          }
-        });
-
-        // Batch update global store (only update once to avoid multiple notifications)
-        if (Object.keys(updates).length > 0) {
-          giftStore.setState(liveID, updates);
-        }
-      }
-    } catch (error) {
-      console.error(`[GiftState] ${eventName} event parse error:`, error);
-      console.log(`[GiftState] ${eventName} event received (raw):`, event);
-    }
-  }, [liveID]);
-
-  /**
-   * Bind event listeners
-   */
   useEffect(() => {
-    if (!liveID) {
-      return;
-    }
-
-    const createListenerKeyObject = (eventName: string, listenerID?: string | null): HybridListenerKey => {
-      return {
-        type: 'state',
-        store: 'GiftStore',
-        name: eventName,
-        roomID: liveID ?? null,
-        listenerID: listenerID ?? null,
-      };
-    };
-
-    // Save references to listener cleanup functions
-    const cleanupFunctions: Array<{ remove: () => void }> = [];
-
-    GIFT_EVENTS.forEach((eventName) => {
-      const keyObject = createListenerKeyObject(eventName);
-      const key = JSON.stringify(keyObject);
-      console.log(key);
-      // addListener automatically registers event listeners for both Native side and JS layer
-      const subscription = addListener(key, handleEvent(eventName));
-      if (subscription) {
-        cleanupFunctions.push(subscription);
-      }
-
-      console.log(`[GiftState] Added listener for: ${eventName}, eventName=${key}`);
-    });
-
-    return () => {
-      GIFT_EVENTS.forEach((eventName) => {
-        const keyObject = createListenerKeyObject(eventName);
-        const key = JSON.stringify(keyObject);
-        removeListener(key);
-      });
-      // Also clean up JS layer subscriptions
-      cleanupFunctions.forEach((cleanup) => {
-        cleanup.remove();
-      });
-    };
-  }, [handleEvent, liveID]);
+    currentLiveBinding.ensureWatchCurrentLive();
+    currentLiveBinding.bindEvent(liveID);
+  }, [liveID]);
 
   /**
    * Refresh usable gifts list
@@ -250,7 +205,7 @@ export function useGiftState(liveID: string) {
         // Only trigger callback on success, state update is handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Refresh usable gifts failed');
+        const error = createStateError(result, 'Refresh usable gifts failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -292,7 +247,7 @@ export function useGiftState(liveID: string) {
         // Only trigger callback on success, state update is handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Send gift failed');
+        const error = createStateError(result, 'Send gift failed');
         onError?.(error);
       }
     } catch (error: any) {
@@ -332,7 +287,7 @@ export function useGiftState(liveID: string) {
         // Only trigger callback on success, state update is handled by event listener
         onSuccess?.();
       } else {
-        const error = new Error(result.error || 'Set language failed');
+        const error = createStateError(result, 'Set language failed');
         onError?.(error);
       }
     } catch (error: any) {

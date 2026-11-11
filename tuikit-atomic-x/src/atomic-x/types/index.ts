@@ -37,3 +37,7 @@ export interface BaseRequestParams {
     [key: string]: unknown;
 }
 
+
+export interface StateError extends Error {
+    code?: number;
+}

@@ -14,9 +14,9 @@ export enum GuestApplicationNoResponseReason {
  */
 export interface LiveUserInfoParam {
   userID: string;
-  nickname?: string;
+  userName?: string;
   avatarURL?: string;
-  role?: string;
+  level?: number;
   [key: string]: unknown;
 }
 
@@ -25,8 +25,14 @@ export interface LiveUserInfoParam {
  */
 export interface SeatUserInfoParam {
   userID: string;
-  nickname?: string;
+  userName?: string;
   avatarURL?: string;
+  role?: number | string;
+  liveID?: string;
+  microphoneStatus?: number | string;
+  allowOpenMicrophone?: boolean;
+  cameraStatus?: number | string;
+  allowOpenCamera?: boolean;
   [key: string]: unknown;
 }
 
@@ -36,7 +42,7 @@ export interface SeatUserInfoParam {
 export interface ApplyForSeatOptions extends Record<string, unknown> {
   seatIndex?: number;
   timeout?: number;
-  extension?: string;
+  extraInfo?: string;
   onSuccess?: () => void;
   onError?: (error: Error | string) => void;
   [key: string]: unknown;
@@ -56,7 +62,6 @@ export interface CancelApplicationOptions extends Record<string, unknown> {
  */
 export interface AcceptApplicationOptions extends Record<string, unknown> {
   userID: string;
-  seatIndex?: number;
   onSuccess?: () => void;
   onError?: (error: Error | string) => void;
   [key: string]: unknown;
@@ -76,10 +81,10 @@ export interface RejectApplicationOptions extends Record<string, unknown> {
  * 邀请上麦选项
  */
 export interface InviteToSeatOptions extends Record<string, unknown> {
-  userID: string;
+  inviteeID: string;
   seatIndex?: number;
   timeout?: number;
-  extension?: string;
+  extraInfo?: string;
   onSuccess?: () => void;
   onError?: (error: Error | string) => void;
   [key: string]: unknown;
